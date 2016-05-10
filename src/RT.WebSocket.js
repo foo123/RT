@@ -12,13 +12,13 @@
 if ( 'object' === typeof exports )
     factory( require('./RT.js') );
 else
-    factory( root['RT'] );
+    factory( root['RT'] ) && ('function' === typeof define) && define.amd && define(function( ){ return root['RT']; });
 }(this, function( RT ) {
 "use strict";
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toString,
-    __super__ = RT.Client[PROTO], Util = RT.Util,
-    WebSocket = window.WebSocket || window.MozWebSocket
+    __super__ = RT.Client[PROTO], U = RT.Util,
+    WebSocket = window.WebSocket || window.MozWebSocket || window.WebkitWebSocket
 ;
 
 function load_websocket_shim( cb )
@@ -31,18 +31,17 @@ function load_websocket_shim( cb )
         script_swfobject = document.createElement('script');
         script_swfobject.setAttribute('type', 'text/javascript');
         script_swfobject.setAttribute('language', 'javascript');
-        script_swfobject.setAttribute('src', base_url+'/websocket/swfobject.js');
+        script_swfobject.setAttribute('src', base_url+'/lib/ws/swfobject.js');
         head.appendChild( script_swfobject );
     }
     
-    window.WEB_SOCKET_SWF_LOCATION = base_url+'/websocket/WebSocketMain.swf';
+    window.WEB_SOCKET_SWF_LOCATION = base_url+'/lib/ws/WebSocketMain.swf';
     window.WEB_SOCKET_FORCE_FLASH = false;
     window.WEB_SOCKET_DEBUG = false;
     
     script_websocket = document.createElement('script');
     script_websocket.setAttribute('type', 'text/javascript');
     script_websocket.setAttribute('language', 'javascript');
-    script_websocket.setAttribute('src', base_url+'/websocket/web_socket.js');
     script_websocket.onload = script_websocket.onreadystatechange = function( ) {
         if ( 'loaded' == script_websocket.readyState  || 'complete' == script_websocket.readyState )
         {
@@ -50,29 +49,59 @@ function load_websocket_shim( cb )
             if ( cb ) cb( );
         }
     };
+    script_websocket.setAttribute('src', base_url+'/lib/ws/web_socket.js');
     head.appendChild( script_websocket );
 }
-
-if ( !WebSocket ) load_websocket_shim(function( ){
-    WebSocket = window.WebSocket;
-});
+if ( !WebSocket ) load_websocket_shim(function( ){ WebSocket = window.WebSocket; });
 
 RT.Client.WS = function Client_WS( config ) {
     var self = this;
     if ( !(self instanceof Client_WS) ) return new Client_WS(config);
     __super__.constructor.call( self, config );
-    self._ws = null;
+    self.$ws$ = null;
 };
 RT.Client.Impl['ws'] = RT.Client.Impl['websocket'] = RT.Client.Impl['web-socket'] = RT.Client.WS;
 
 /* extends RT.Client class */
 RT.Client.WS[PROTO] = Object.create( __super__ );
 RT.Client.WS[PROTO].constructor = RT.Client.WS;
-RT.Client.WS[PROTO]._ws = null;
+RT.Client.WS[PROTO].$ws$ = null;
 RT.Client.WS[PROTO].dispose = function( ){
     var self = this;
-    self._ws = null;
+    self.$ws$ = null;
     return __super__.dispose.call( self );
+};
+RT.Client.WS[PROTO].abort = function( ){
+    var self = this, ws = self.$ws$;
+    if ( ws && (WebSocket.OPEN === ws.readyState) ) ws.close( );
+    self.$ws$ = null;
+    return self;
+};
+RT.Client.WS[PROTO].close = function( ){
+    var self = this, ws = self.$ws$;
+    if ( ws && (WebSocket.OPEN === ws.readyState) ) ws.close( );
+    return self;
+};
+RT.Client.WS[PROTO].send = function( payload ){
+    var self = this, ws = self.$ws$;
+    if ( ws && (WebSocket.OPEN === ws.readyState) ) ws.send( String(payload) );
+    return self;
+};
+RT.Client.WS[PROTO].listen = function( ){
+    var self = this, ws;
+    ws = self.$ws$ = new WebSocket( self.$cfg$.url );
+    ws.addEventListener('open', function( e ) {
+        self.emit('open', e);
+    });
+    ws.addEventListener('close', function( e ) {
+        self.emit('close', e);
+    });
+    ws.addEventListener('error', function( e ) {
+        self.emit('error', e);
+    });
+    ws.addEventListener('message', function( evt ) {
+        self.emit('receive', e.data);
+    });
 };
 
 // export it

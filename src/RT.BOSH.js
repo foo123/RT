@@ -12,62 +12,105 @@
 if ( 'object' === typeof exports )
     factory( require('./RT.js') );
 else
-    factory( root['RT'] );
+    factory( root['RT'] ) && ('function' === typeof define) && define.amd && define(function( ){ return root['RT']; });
 }(this, function( RT ) {
 "use strict";
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toString,
-    __super__ = RT.Client[PROTO], Util = RT.Util
+    __super__ = RT.Client[PROTO], U = RT.Util, XHR = RT.XHR
 ;
 
-function XHR( )
-{
-    return window.XMLHttpRequest
-        // code for IE7+, Firefox, Chrome, Opera, Safari
-        ? new XMLHttpRequest( )
-        // code for IE6, IE5
-        : new ActiveXObject('Microsoft.XMLHTTP') // or ActiveXObject('Msxml2.XMLHTTP'); ??
-    ;
-}
-function ajax( xhr, url, headers, data, cb )
-{
-    if ( xhr )
-    {
-        try{ xhr.abort( ); }catch(e){ }
-        xhr = null;
-    }
-    xhr = xhr || XHR( );
-    xhr.open('POST', url, true);
-    xhr.responseType = 'text';
-    xhr.setRequestHeader('Content-Type', 'text/plain; charset=utf8');
-    xhr.overrideMimeType('text/plain; charset=utf8');
-    if ( headers ) Util.Header.encode( headers, xhr );
-    xhr.onload = function( ) {
-        var err = 200 !== xhr.status,
-            response = err ? xhr.statusText : xhr.responseText;
-        if ( cb ) cb( err, response, xhr.getAllResponseHeaders( ), xhr.status, xhr.statusText );
-    };
-    xhr.send( data );
-    return xhr;
-}
-
-RT.Client.BOSH = function Client_BOSH( config ) {
+RT.Client.BOSH = function Client_Bosh( cfg ) {
     var self = this;
-    if ( !(self instanceof Client_BOSH) ) return new Client_BOSH(config);
-    __super__.constructor.call( self, config );
-    self._xhr = null;
+    if ( !(self instanceof Client_Bosh) ) return new Client_Bosh(cfg);
+    __super__.constructor.call( self, cfg );
+    self.$xhr$ = null;
 };
-RT.Client.Impl['bosh'] = RT.Client.BOSH;
+RT.Client.Impl['bosh'] = RT.Client.Impl['long-poll'] = RT.Client.BOSH;
 
 /* extends RT.Client class */
 RT.Client.BOSH[PROTO] = Object.create( __super__ );
 RT.Client.BOSH[PROTO].constructor = RT.Client.BOSH;
-RT.Client.BOSH[PROTO]._xhr = null;
+RT.Client.BOSH[PROTO].$xhr$ = null;
 RT.Client.BOSH[PROTO].dispose = function( ){
     var self = this;
-    if ( self._xhr ) try{ self._xhr.abort( ); }catch(e){ }
-    self._xhr = null;
+    self.abort( );
     return __super__.dispose.call( self );
+};
+RT.Client.BOSH[PROTO].abort = function( trigger ){
+    var self = this;
+    if ( self.$xhr$ ) { self.$xhr$.abort( true===trigger ); self.$xhr$ = null; }
+    return self;
+};
+RT.Client.BOSH[PROTO].$poll$ = function( immediate ){
+    var self = this;
+    var poll = function poll( ) {
+        var headers = {
+            'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
+            'X-RT-Receive'      : '1', // receive incoming message(s)
+            'X-RT-Timestamp'    : self.$timestamp$
+        };
+        var rt_msg = null, msgs = null;
+        if ( self.$queue$.length )
+        {
+            // send message(s) on same request
+            headers['X-RT-Send'] = '1';
+            headers['X-RT-Message'] = rt_msg = RT.UUID('----------------------');
+            msgs = self.$queue$.slice( );
+        }
+        self.$xhr$ = XHR.create({
+            url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__NOCACHE__='+(new Date().getTime()),
+            method          : 'POST',
+            responseType    : 'text',
+            //mimeType        : 'text/plain; charset=utf8',
+            headers         : headers,
+            onError         : function( xhr ) {
+                self.emit('error', xhr.statusText);
+            },
+            onTimeout       : function( xhr ) {
+                self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
+            },
+            onComplete      : function( xhr ) {
+                var rt_msg = xhr.responseHeader( 'X-RT-Message' ),
+                    rt_close = xhr.responseHeader( 'X-RT-Close' ),
+                    rt_error = xhr.responseHeader( 'X-RT-Error' ),
+                    rt_timestamp = xhr.responseHeader( 'X-RT-Timestamp' )
+                ;
+                if ( rt_error )
+                {
+                    self.emit( 'error', rt_error );
+                    return;
+                }
+                if ( rt_close )
+                {
+                    self.close( );
+                    return;
+                }
+                if ( rt_msg )
+                {
+                    // at the same time, handle incoming message(s)
+                    var msgs = (xhr.responseText||'').split( rt_msg ), i, l;
+                    for(i=0,l=msgs.length; i<l; i++)
+                        self.emit('receive', msgs[i]);
+                }
+                if ( rt_timestamp ) self.$timestamp$ = rt_timestamp;
+                // message(s) sent
+                if ( msgs ) self.$queue$.splice( 0, msgs.length );
+                self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
+            }
+        }, msgs ? ('rt_payload='+U.Url.encode( msgs.join( rt_msg ) )) : null);
+    };
+    self.$timer$ = setTimeout(poll, true === immediate ? 0 : self.$cfg$.pollInterval);
+    return self;
+};
+RT.Client.BOSH[PROTO].send = function( payload ){
+    var self = this;
+    self.$queue$.push( String(payload) );
+    return self;
+};
+RT.Client.BOSH[PROTO].listen = function( ){
+    var self = this;
+    return self.emit( 'open' ).$poll$( true );
 };
 
 // export it

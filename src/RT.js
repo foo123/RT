@@ -11,26 +11,124 @@
 if ( 'object' === typeof exports )
     module.exports = factory( );
 else
-    (root[name] = factory( )) && ('function' === typeof define) && define.amd && define(function( req ) { return root[name]; });
+    (root[name] = factory( )) && ('function' === typeof define) && define.amd && define(function( ){ return root[name]; });
 }(this, 'RT', function( ) {
 "use strict";
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty',
-   KEYS = Object.keys, toString = Object[PROTO].toString,
-   trim = String[PROTO].trim 
+    KEYS = Object.keys, toString = Object[PROTO].toString,
+    CC = String.fromCharCode,
+    trim_re = /^\s+|\s+$/g,
+    trim = String[PROTO].trim 
         ? function( s ) { return s.trim( ); }
-        : function( s ) { return s.replace(/^\s+|\s+$/g, ''); }
+        : function( s ) { return s.replace(trim_re, ''); },
+    a2b_re = /[^A-Za-z0-9\+\/\=]/g, hex_re = /\x0d\x0a/g,
+    XHR = window.XMLHttpRequest
+    ? function( ){ return new XMLHttpRequest( ); }
+    : function( ){ return new ActiveXObject('Microsoft.XMLHTTP'); /* or ActiveXObject('Msxml2.XMLHTTP'); ??*/ },
+    UUID = 0
 ;
 
-function RT( config )
+function RT( cfg )
 {
-    config = config || { };
-    var type = (config.type || 'default').toLowerCase( );
-    return RT.Client.Impl[HAS](type) ? new RT.Client.Impl[type]( config ) : new RT.Client( config );
+    cfg = cfg || { };
+    var type = (cfg.rt_type || 'default').toLowerCase( );
+    return RT.Client.Impl[HAS](type) ? new RT.Client.Impl[type]( cfg ) : new RT.Client( cfg );
 }
 RT.VERSION = '0.1.0';
 
+RT.XHR = {
+    create: function( o, payload ) {
+        o = o || {};
+        var xhr = XHR( ), trigger_abort = true;
+        xhr._abort = xhr.abort;
+        xhr._aborted = false;
+        xhr.abort = function( and_trigger ){
+            if ( xhr._aborted ) return;
+            if ( false === and_trigger ) trigger_abort = false;
+            try{ xhr._abort( ); }catch(e){ }
+            xhr._aborted = true;
+            trigger_abort = true;
+        };
+        xhr.__headers__ = null;
+        xhr.responseHeader = function( key ) {
+            if ( (null == key) || (4/*DONE*/ !== xhr.readyState) ) return null;
+            var headers = xhr.getAllResponseHeaders( ) || '';
+            if ( null == xhr.__headers__ ) xhr.__headers__ = RT.Util.Header.decode( headers );
+            return xhr.__headers__[HAS](key) ? xhr.__headers__[key] : null;
+        };
+        xhr.responseHeaders = function( decoded ) {
+            if ( 4/*DONE*/ !== xhr.readyState ) return null;
+            var headers = xhr.getAllResponseHeaders( ) || '';
+            if ( null == xhr.__headers__ ) xhr.__headers__ = RT.Util.Header.decode( headers );
+            return true===decoded ? xhr.__headers__ : headers;
+        };
+        if ( !o.url ) return xhr;
+        xhr.open( o.method||'GET', o.url, !o.sync );
+        xhr.responseType = o.responseType || 'text';
+        if ( o.headers ) RT.Util.Header.encode( o.headers, xhr );
+        if ( o.mimeType ) xhr.overrideMimeType( o.mimeType );
+        //xhr.setRequestHeader('Content-Type', 'text/plain; charset=utf8');
+        //xhr.overrideMimeType('text/plain; charset=utf8');
+        xhr.timeout = o.timeout || 30000; // 30 secs default timeout
+        if ( o.onProgress )
+        {
+            xhr.onprogress = function( ) {
+                o.onProgress( xhr );
+            };
+        }
+        if ( o.onLoadStart )
+        {
+            xhr.onloadstart = function( ) {
+                o.onLoadStart( xhr );
+            };
+        }
+        if ( o.onLoadEnd )
+        {
+            xhr.onloadend = function( ) {
+                o.onLoadEnd( xhr );
+            };
+        }
+        if ( !o.sync && o.onStateChange )
+        {
+            xhr.onreadystatechange = function( ) {
+                o.onStateChange( xhr );
+            };
+        }
+        xhr.onload = function( ) {
+            if ( (4/*DONE*/ === xhr.readyState) )
+            {
+                if ( 200 === xhr.status )
+                {
+                    if ( o.onComplete ) o.onComplete( xhr );
+                }
+                else
+                {
+                    if ( o.onRequestError ) o.onRequestError( xhr );
+                    else if ( o.onError ) o.onError( xhr );
+                }
+            }
+        };
+        xhr.onabort = function( ) {
+            if ( trigger_abort && o.onAbort ) o.onAbort( xhr );
+        };
+        xhr.onerror = function( ) {
+            if ( o.onError ) o.onError( xhr );
+        };
+        xhr.ontimeout = function( ) {
+            if ( o.onTimeout ) o.onTimeout( xhr );
+        };
+        if ( arguments.length > 1 ) xhr.send( payload );
+        return xhr;
+    }
+};
+
+RT.UUID = function( PREFIX, SUFFIX ) {
+    return (PREFIX||'') + (++UUID) + '_' + (Date.now()) + '_' + Math.floor((1000*Math.random())) + (SUFFIX||'');
+};
+
 RT.Const = {
+    BASE64: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
     CRLF: "\r\n",
     CRLF_RE: /(\r\n)|\r|\n/g,
     COOKIE_RE: /([^=]+)(?:=(.*))?/
@@ -41,9 +139,104 @@ RT.Util = {
       trim: trim  
     },
     
+    // adapted from jquery.base64
+    Utf8: {
+        encode: function( string ) {
+            string = string.replace(hex_re, "\x0a");
+            var output = '', n, l, c;
+            for (n=0,l=string.length; n<l; n++)
+            {
+                c = string.charCodeAt(n);
+                if ( c < 128 )
+                    output += CC(c);
+                else if ( (c > 127) && (c < 2048) )
+                    output += CC((c >> 6) | 192) + CC((c & 63) | 128);
+                else
+                    output += CC((c >> 12) | 224) + CC(((c >> 6) & 63) | 128) + CC((c & 63) | 128);
+            }
+            return output;
+        },
+        decode: function( input ) {
+            var string = '', i = 0, c = c1 = c2 = 0, l = input.length;
+            while (i < l)
+            {
+                c = input.charCodeAt(i);
+                if ( c < 128 )
+                {
+                    string += CC(c);
+                    i++;
+                }
+                else if ( (c > 191) && (c < 224) )
+                {
+                    c2 = input.charCodeAt(i+1);
+                    string += CC(((c & 31) << 6) | (c2 & 63));
+                    i += 2;
+                }
+                else
+                {
+                    c2 = input.charCodeAt(i+1);
+                    c3 = input.charCodeAt(i+2);
+                    string += CC(((c & 15) << 12) | ((c2 & 63) << 6) | (c3 & 63));
+                    i += 3;
+                }
+            }
+            return string;
+        }
+    },
+    
+    // adapted from jquery.base64
     Base64: {
-        encode: btoa,
-        decode: atob
+        encode: function( input ) {
+            input = RT.Util.Utf8.encode( input );
+            var output = '', chr1, chr2, chr3,
+                enc1, enc2, enc3, enc4, i = 0, l = input.length,
+                keyString = RT.Const.BASE64;
+            while ( i < l )
+            {
+                chr1 = input.charCodeAt(i++);
+                chr2 = input.charCodeAt(i++);
+                chr3 = input.charCodeAt(i++);
+                enc1 = chr1 >> 2;
+                enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
+                enc3 = ((chr2 & 15) << 2) | (chr3 >> 6);
+                enc4 = chr3 & 63;
+                if ( isNaN(chr2) )
+                {
+                    enc3 = enc4 = 64;
+                }
+                else if ( isNaN(chr3) )
+                {
+                    enc4 = 64;
+                }
+                output = output + keyString.charAt(enc1) + keyString.charAt(enc2) + keyString.charAt(enc3) + keyString.charAt(enc4);
+            }
+            return output;
+        },
+        decode: function( input ) {
+            input = input.replace(a2b_re, '');
+            var output = '', chr1, chr2, chr3, enc1, enc2, enc3, enc4, i = 0, l = input.length;
+            while ( i < l )
+            {
+                enc1 = keyString.indexOf(input.charAt(i++));
+                enc2 = keyString.indexOf(input.charAt(i++));
+                enc3 = keyString.indexOf(input.charAt(i++));
+                enc4 = keyString.indexOf(input.charAt(i++));
+                chr1 = (enc1 << 2) | (enc2 >> 4);
+                chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+                chr3 = ((enc3 & 3) << 6) | enc4;
+                output = output + CC(chr1);
+                if ( 64 != enc3 )
+                {
+                    output += CC(chr2);
+                }
+                if ( 64 != enc4 )
+                {
+                    output += CC(chr3);
+                }
+            }
+            output = RT.Util.Utf8.decode( output );
+            return output;
+        }
     },
     
     Json: {
@@ -130,7 +323,7 @@ RT.Util = {
             var cookie = RT.Util.Cookie.create( ),
                 /*  parse value/name  */
                 equalsSplit = RT.Const.COOKIE_RE,
-                cookieParams = ("" + cookieString).split("; "),
+                cookieParams = String(cookieString).split('; '),
                 cookieParam, attr, i, len
             ;
             if ( null == (cookieParam = cookieParams.shift().match(equalsSplit)) ) return;
@@ -145,7 +338,7 @@ RT.Util = {
                 if ( null != cookieParam && cookieParam.length)
                 {
                     attr = cookieParam[1].toLowerCase();
-                    if ( 'undefined' !== typeof cookie[attr] )
+                    if ( cookie[HAS](attr) )
                         cookie[attr] = 'string' === typeof cookieParam[2] ? cookieParam[2] : true;
                 }
             }
@@ -156,11 +349,21 @@ RT.Util = {
     },
     
     Header: {
-        encode: function( headers, xhr ) {
+        encode: function( headers, xmlHttpRequest, httpServerResponse ) {
             var header = '';
             if ( !headers ) return xhr ? xhr : header;
             var keys = KEYS(headers), key, i, l, k, kl, CRLF = RT.Const.CRLF;
-            if ( xhr )
+            if ( httpServerResponse )
+            {
+                for(i=0,l=keys.length; i<l; i++)
+                {
+                    key = keys[i];
+                    // both single value and array
+                    httpServerResponse.setHeader(key, headers[key]);
+                }
+                return httpServerResponse;
+            }
+            else if ( xmlHttpRequest )
             {
                 for(i=0,l=keys.length; i<l; i++)
                 {
@@ -168,14 +371,14 @@ RT.Util = {
                     if ( '[object Array]' === toString.call(headers[key]) )
                     {
                         for(k=0,kl=headers[key].length; k<kl; k++)
-                            xhr.setRequestHeader(key, headers[key][k]);
+                            xmlHttpRequest.setRequestHeader(key, headers[key][k]);
                     }
                     else
                     {
-                        xhr.setRequestHeader(key, headers[key]);
+                        xmlHttpRequest.setRequestHeader(key, headers[key]);
                     }
                 }
-                return xhr;
+                return xmlHttpRequest;
             }
             else
             {
@@ -189,7 +392,8 @@ RT.Util = {
                     }
                     else
                     {
-                        header += CRLF + String(headers[key]);
+                        if ( header.length ) header += CRLF;
+                        header += key + ': ' + String(headers[key]);
                     }
                 }
                 return header;
@@ -209,11 +413,19 @@ RT.Util = {
                     {
                         key = trim(parts.shift());
                         if ( lowercase ) key = key.toLowerCase();
-                        header[key] = parts.join(':');
+                        if ( header[HAS](key) )
+                        {
+                            if ( 'string' === typeof header[key] ) header[key] = [header[key]];
+                            header[key].push( trim(parts.join(':')) );
+                        }
+                        else
+                        {
+                            header[key] = trim(parts.join(':'));
+                        }
                     }
-                    else if ( key )
+                    else if ( parts[0].length && key )
                     {
-                        header[key] += CRLF + parts[0];
+                        header[key] = CRLF + parts[0];
                     }
                 }
             }
@@ -222,71 +434,110 @@ RT.Util = {
     }
 };
 
-RT.Client = function Client( config ) {
+RT.Client = function Client( cfg ) {
     var self = this;
-    if ( !(self instanceof Client) ) return new Client( config );
-    self._config = config;
-    self._event = { };
+    if ( !(self instanceof Client) ) return new Client( cfg );
+    self.$cfg$ = cfg || { };
+    self.$event$ = { };
     self.status = RT.Client.CREATED;
 };
 
 RT.Client.Impl = { };
 
+RT.Client.CREATED = 1;
+RT.Client.DESTROYED = 0;
 RT.Client.OPENED = 2;
 RT.Client.CLOSED = 4;
 RT.Client.PENDING = 8;
-RT.Client.CREATED = 1;
-RT.Client.DESTROYED = 0;
 
 RT.Client[PROTO] = {
      constructor: RT.Client
     ,status: RT.Client.CREATED
-    ,_config: null
-    ,_event: null
+    ,$cfg$: null
+    ,$event$: null
     ,dispose: function( ){
         var self = this;
         self.status = RT.Client.DESTROYED;
-        self._config = null;
-        self._event = null;
+        self.$cfg$ = null;
+        self.$event$ = null;
         return self;
     }
-    ,addEventListener: function( event, handler ){
+    ,config: function( key, val ) {
+        var self = this, cfg = self.$cfg$;
+        if ( key )
+        {
+            if ( arguments.length > 1 )
+            {
+                cfg[key] = val;
+                return self;
+            }
+            else
+            {
+                return cfg[key];
+            }
+        }
+    }
+    ,on: function( event, handler, once ){
         var self = this;
         if ( !event || !handler ) return self;
-        if ( !self._event[HAS](event) ) self._event[event] = [handler];
-        else self._event[event].push(handler);
+        if ( !self.$event$[HAS](event) ) self.$event$[event] = [[handler, true===once, 0]];
+        else self.$event$[event].push([handler, true===once, 0]);
         return self;
     }
-    ,removeEventListener: function( event, handler ){
+    ,one: function( event, handler ){
+        return this.on( event, handler, true );
+    }
+    ,off: function( event, handler ){
         var self = this;
-        if ( !event || !self._event[HAS](event) ) return self;
+        if ( !event || !self.$event$[HAS](event) ) return self;
         if ( null == handler )
         {
-            delete self._event[event];
+            delete self.$event$[event];
         }
         else
         {
-            for(var handle=self._event[event],i=handle.length-1; i>=0; i--)
-                if ( handle[i] === handler ) handler.splice(i, 1);
-            if ( !handle.length ) delete self._event[event];
+            for(var handle=self.$event$[event],i=handle.length-1; i>=0; i--)
+                if ( handle[i][0] === handler ) handler.splice(i, 1);
+            if ( !handle.length ) delete self.$event$[event];
         }
         return self;
     }
-    ,trigger: function( event, data ){
+    ,emit: function( event, data ){
         var self = this;
-        if ( !event || !self._event[HAS](event) ) return self;
-        var handler = self._event[event].slice( ), i, l = handler.length;
-        for(i=0; i<l; i++) handler[i]( data );
+        if ( !event || !self.$event$[HAS](event) ) return self;
+        var handler = self.$event$[event].slice( ), i, l = handler.length, h, rem = [];
+        var evt = {event:event, data:data, target:self};
+        for(i=0; i<l; i++)
+        {
+            h = handler[i];
+            if ( h[1] ) rem.push( i );
+            if ( !h[1] || !h[2] ) { h[2] = 1; h[0]( evt ); }
+        }
+        handler = self.$event$[event];
+        for(i=rem.length-1; i>=0; i--) handler.splice( rem[i], 1 );
+        if ( !handler.length ) delete self.$event$[event];
         return self;
     }
-    ,open: function( ){ }
-    ,close: function( ){ }
-    ,send: function( ){ }
-    ,listen: function( ){ }
+    ,abort: function( trigger ){
+        return true === trigger ? this.emit('abort') : this;
+    }
+    ,open: function( ){
+        return this.emit('open');
+    }
+    ,close: function( ){
+        return this.abort( false ).emit('close');
+    }
+    ,send: function( payload ){
+        return this;
+    }
+    ,listen: function( ){
+        return this;
+    }
 };
 // aliases
-RT.Client[PROTO].on = RT.Client[PROTO].addEventListener;
-RT.Client[PROTO].off = RT.Client[PROTO].removeEventListener;
+RT.Client[PROTO].addEventListener = RT.Client[PROTO].on;
+RT.Client[PROTO].removeEventListener = RT.Client[PROTO].off;
+RT.Client[PROTO].trigger = RT.Client[PROTO].dispatchEvent = RT.Client[PROTO].emit;
 
 // export it
 return RT;

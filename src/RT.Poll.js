@@ -12,122 +12,115 @@
 if ( 'object' === typeof exports )
     factory( require('./RT.js') );
 else
-    factory( root['RT'] );
+    factory( root['RT'] ) && ('function' === typeof define) && define.amd && define(function( ){ return root['RT']; });
 }(this, function( RT ) {
 "use strict";
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toString,
-    __super__ = RT.Client[PROTO], Util = RT.Util
+    __super__ = RT.Client[PROTO], U = RT.Util, XHR = RT.XHR
 ;
 
-function XHR( )
-{
-    return window.XMLHttpRequest
-        // code for IE7+, Firefox, Chrome, Opera, Safari
-        ? new XMLHttpRequest( )
-        // code for IE6, IE5
-        : new ActiveXObject('Microsoft.XMLHTTP') // or ActiveXObject('Msxml2.XMLHTTP'); ??
-    ;
-}
-function ajax( xhr, url, headers, data, cb )
-{
-    if ( xhr )
-    {
-        try{ xhr.abort( ); }catch(e){ }
-        xhr = null;
-    }
-    xhr = xhr || XHR( );
-    xhr.open('POST', url, true);
-    xhr.responseType = 'text';
-    xhr.setRequestHeader('Content-Type', 'text/plain; charset=utf8');
-    xhr.overrideMimeType('text/plain; charset=utf8');
-    if ( headers ) Util.Header.encode( headers, xhr );
-    xhr.onload = function( ) {
-        var err = 200 !== xhr.status,
-            response = err ? xhr.statusText : xhr.responseText;
-        if ( cb ) cb( err, response, xhr.getAllResponseHeaders( ), xhr.status, xhr.statusText );
-    };
-    xhr.send( data );
-    return xhr;
-}
-
-RT.Client.Poll = function Client_Poll( config ) {
+RT.Client.Poll = function Client_Poll( cfg ) {
     var self = this;
-    if ( !(self instanceof Client_Poll) ) return new Client_Poll(config);
-    __super__.constructor.call( self, config );
-    self._interval = config.pollInterval || 500;
-    self._timer = null;
-    self._xhr = null;
-    self._queue = [];
+    if ( !(self instanceof Client_Poll) ) return new Client_Poll(cfg);
+    __super__.constructor.call( self, cfg );
+    self.$cfg$.pollInterval = self.$cfg$.pollInterval || 1000;
+    self.$timer$ = null;
+    self.$xhr$ = null;
+    self.$timestamp$ = 0;
+    self.$queue$ = [];
 };
-RT.Client.Impl['poll'] = RT.Client.Impl['ajax'] = RT.Client.Impl['xhr'] = RT.Client.Impl['ajax-poll'] = RT.Client.Impl['xhr-poll'] = RT.Client.Poll;
+RT.Client.Impl['poll'] = RT.Client.Impl['short-poll'] = RT.Client.Poll;
 
 /* extends RT.Client class */
 RT.Client.Poll[PROTO] = Object.create( __super__ );
 RT.Client.Poll[PROTO].constructor = RT.Client.Poll;
-RT.Client.Poll[PROTO]._interval = 500;
-RT.Client.Poll[PROTO]._timer = null;
-RT.Client.Poll[PROTO]._xhr = null;
+RT.Client.Poll[PROTO].$timer$ = null;
+RT.Client.Poll[PROTO].$xhr$ = null;
+RT.Client.Poll[PROTO].$queue$ = null;
+RT.Client.Poll[PROTO].$timestamp$ = null;
 RT.Client.Poll[PROTO].dispose = function( ){
     var self = this;
-    if ( self._timer ) clearTimeout( self._timer );
-    if ( self._xhr ) try{ self._xhr.abort( ); }catch(e){ }
-    self._timer = null;
-    self._xhr = null;
-    self._interval = null;
-    self._queue = null;
+    self.abort( );
+    self.$timestamp$ = null;
+    self.$queue$ = null;
     return __super__.dispose.call( self );
 };
-RT.Client.Poll[PROTO]._poll = function poll( url ){
+RT.Client.Poll[PROTO].abort = function( trigger ){
     var self = this;
-    var headers = self._headers || {};
-    headers['X-RT-POLL'] = 1;
-    self._headers = { };
-    self._xhr = ajax( self._xhr, url, headers, self._queue.shift( ), function( err, response, headers ){
-        headers = Util.Header.decode( headers, true );
-        var message_type = headers[ 'x-rt-type' ];
-        if ( err ) self.trigger( 'error', response );
-        else if ( !!response )
+    if ( self.$timer$ ) { clearTimeout( self.$timer$ ); self.$timer$ = null; }
+    if ( self.$xhr$ ) { self.$xhr$.abort( true===trigger ); self.$xhr$ = null; }
+    return self;
+};
+RT.Client.Poll[PROTO].$poll$ = function( immediate ){
+    var self = this;
+    var poll = function poll( ) {
+        var headers = {
+            'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
+            'X-RT-Receive'      : '1', // receive incoming message(s)
+            'X-RT-Timestamp'    : self.$timestamp$
+        };
+        var rt_msg = null, msgs = null;
+        if ( self.$queue$.length )
         {
-            self.trigger( open ? 'open' : 'message', response );
+            // send message(s) on same request
+            headers['X-RT-Send'] = '1';
+            headers['X-RT-Message'] = rt_msg = RT.UUID('----------------------');
+            msgs = self.$queue$.slice( );
         }
-        self._timer = setTimeout(function( ){
-            poll( url );
-        }, self._interval);
-    });
-};
-RT.Client.Poll[PROTO].send = function( data ){
-    var self = this;
-    self._queue.push( data );
+        self.$xhr$ = XHR.create({
+            url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__NOCACHE__='+(new Date().getTime()),
+            method          : 'POST',
+            responseType    : 'text',
+            //mimeType        : 'text/plain; charset=utf8',
+            headers         : headers,
+            onError         : function( xhr ) {
+                self.emit('error', xhr.statusText);
+            },
+            onTimeout       : function( xhr ) {
+                self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
+            },
+            onComplete      : function( xhr ) {
+                var rt_msg = xhr.responseHeader( 'X-RT-Message' ),
+                    rt_close = xhr.responseHeader( 'X-RT-Close' ),
+                    rt_error = xhr.responseHeader( 'X-RT-Error' ),
+                    rt_timestamp = xhr.responseHeader( 'X-RT-Timestamp' )
+                ;
+                if ( rt_error )
+                {
+                    self.emit( 'error', rt_error );
+                    return;
+                }
+                if ( rt_close )
+                {
+                    self.close( );
+                    return;
+                }
+                if ( rt_msg )
+                {
+                    // at the same time, handle incoming message(s)
+                    var msgs = (xhr.responseText||'').split( rt_msg ), i, l;
+                    for(i=0,l=msgs.length; i<l; i++)
+                        self.emit('receive', msgs[i]);
+                }
+                if ( rt_timestamp ) self.$timestamp$ = rt_timestamp;
+                // message(s) sent
+                if ( msgs ) self.$queue$.splice( 0, msgs.length );
+                self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
+            }
+        }, msgs ? ('rt_payload='+U.Url.encode( msgs.join( rt_msg ) )) : null);
+    };
+    self.$timer$ = setTimeout(poll, true === immediate ? 0 : self.$cfg$.pollInterval);
     return self;
 };
-RT.Client.Poll[PROTO].listen = function( url ){
+RT.Client.Poll[PROTO].send = function( payload ){
     var self = this;
-    self._poll( url, true );
+    self.$queue$.push( String(payload) );
     return self;
 };
-RT.Client.Poll[PROTO].open = function( url ){
+RT.Client.Poll[PROTO].listen = function( ){
     var self = this;
-    var headers = self._headers || {};
-    headers['X-RT-POLL'] = 1;
-    self._headers = { };
-    self._xhr = ajax( self._xhr, url, headers, self._queue.shift( ), function( err, response, headers ){
-        headers = Util.Header.decode( headers, true );
-        var message_type = headers[ 'x-rt-type' ];
-        if ( err ) self.trigger( 'error', response );
-        else if ( !!response )
-        {
-            self.trigger( open ? 'open' : 'message', response );
-        }
-        self._timer = setTimeout(function( ){
-            poll( url );
-        }, self._interval);
-    });
-};
-RT.Client.Poll[PROTO].close = function( ){
-    var self = this;
-    self._queue = [];
-    return self;
+    return self.emit( 'open' ).$poll$( true );
 };
 
 // export it

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>RT XHR Post Test</title>
+    <script type="text/javascript" src="../src/RT.js"></script>
+    <script>
+    function doAjax( payload )
+    {
+        var output = document.getElementById('output'),
+            status = document.getElementById('status');
+        output.innerHTML = '';
+        status.innerHTML = '';
+        RT.XHR.create({
+            method          : 'POST',
+            url             : 'post.php',
+            responseType    : 'text',
+            //mimeType        : 'text/plain; charset=utf8',
+            headers         : {
+                'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
+                'X-RT-Poll'         : '1',
+                'X-RT-Send'         : '1'
+            },
+            onComplete          : function( xhr ) {
+                status.innerHTML = 'X-RT-Close: ' + xhr.responseHeader( 'X-RT-Close' );
+                output.innerHTML = xhr.responseText;
+            },
+            onError         : function( xhr ) {
+                status.innerHTML = xhr.statusText;
+            }
+        }, 'payload='+RT.Util.Url.encode(String(payload)));
+    }
+    </script>
+</head>
+<body>
+<button style="padding:4px" onclick="doAjax('payload=test')">Send</button><br />
+<pre id="status"></pre>
+<hr />
+<pre id="output"></pre>
+</body>
+</html>
