@@ -24,57 +24,93 @@ RT.Client.BOSH = function Client_Bosh( cfg ) {
     var self = this;
     if ( !(self instanceof Client_Bosh) ) return new Client_Bosh(cfg);
     __super__.constructor.call( self, cfg );
-    self.$xhr$ = null;
+    self.$cfg$.timeout = self.$cfg$.timeout || 1000;
+    self.$send$ = null;
+    self.$recv$ = null;
+    self.$mID$ = 0;
 };
 RT.Client.Impl['bosh'] = RT.Client.Impl['long-poll'] = RT.Client.BOSH;
 
 /* extends RT.Client class */
 RT.Client.BOSH[PROTO] = Object.create( __super__ );
 RT.Client.BOSH[PROTO].constructor = RT.Client.BOSH;
-RT.Client.BOSH[PROTO].$xhr$ = null;
+RT.Client.BOSH[PROTO].$send$ = null;
+RT.Client.BOSH[PROTO].$recv$ = null;
+RT.Client.BOSH[PROTO].$mID$ = null;
 RT.Client.BOSH[PROTO].dispose = function( ){
     var self = this;
     self.abort( );
+    self.$mID$ = null;
     return __super__.dispose.call( self );
 };
 RT.Client.BOSH[PROTO].abort = function( trigger ){
     var self = this;
-    if ( self.$xhr$ ) { self.$xhr$.abort( true===trigger ); self.$xhr$ = null; }
+    //if ( self.$send$ ) { self.$send$.abort( true===trigger ); self.$send$ = null; }
+    if ( self.$recv$ ) { self.$recv$.abort( true===trigger ); self.$recv$ = null; }
+    self.$send$ = null;
     return self;
 };
-RT.Client.BOSH[PROTO].$poll$ = function( immediate ){
+RT.Client.BOSH[PROTO].send = function( payload ){
     var self = this;
-    var poll = function poll( ) {
-        var headers = {
+    XHR.create({
+        url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
+        method          : 'POST',
+        responseType    : 'text',
+        //mimeType        : 'text/plain; charset=utf8',
+        headers         : {
             'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
-            'X-RT-Receive'      : '1', // receive incoming message(s)
-            'X-RT-Timestamp'    : self.$timestamp$
-        };
-        var rt_msg = null, msgs = null;
-        if ( self.$queue$.length )
-        {
-            // send message(s) on same request
-            headers['X-RT-Send'] = '1';
-            headers['X-RT-Message'] = rt_msg = RT.UUID('----------------------');
-            msgs = self.$queue$.slice( );
+            'X-RT--BOSH'        : '1', // this uses BOSH
+            'X-RT--Send'        : '1' // this is the send channel
+        },
+        onError         : function( xhr ) {
+            self.emit('error', xhr.statusText);
+        },
+        onComplete      : function( xhr ) {
+            var rt_close = xhr.responseHeader( 'X-RT--Close' ),
+                rt_error = xhr.responseHeader( 'X-RT--Error' )
+            ;
+            if ( rt_error )
+            {
+                self.emit( 'error', rt_error );
+                return;
+            }
+            if ( rt_close )
+            {
+                self.close( );
+                return;
+            }
         }
-        self.$xhr$ = XHR.create({
-            url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__NOCACHE__='+(new Date().getTime()),
+    }, 'rt_payload='+U.Url.encode( String(payload) ));
+    return self;
+};
+RT.Client.BOSH[PROTO].listen = function( ){
+    var self = this;
+    self.emit( 'open' );
+    var listen = function listen( ) {
+        self.$recv$ = XHR.create({
+            url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
+            timeout         : self.$cfg$.timeout,
             method          : 'POST',
             responseType    : 'text',
             //mimeType        : 'text/plain; charset=utf8',
-            headers         : headers,
+            headers         : {
+                'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
+                'X-RT--BOSH'        : '1', // this uses BOSH
+                'X-RT--Receive'     : '1', // this is the receive channel
+                'X-RT--mID'         : self.$mID$
+            },
             onError         : function( xhr ) {
                 self.emit('error', xhr.statusText);
+                self.$recv$ = null;
             },
             onTimeout       : function( xhr ) {
-                self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
+                setTimeout( listen, 0 );
             },
             onComplete      : function( xhr ) {
-                var rt_msg = xhr.responseHeader( 'X-RT-Message' ),
-                    rt_close = xhr.responseHeader( 'X-RT-Close' ),
-                    rt_error = xhr.responseHeader( 'X-RT-Error' ),
-                    rt_timestamp = xhr.responseHeader( 'X-RT-Timestamp' )
+                var rt_msg = xhr.responseHeader( 'X-RT--Message' ),
+                    rt_close = xhr.responseHeader( 'X-RT--Close' ),
+                    rt_error = xhr.responseHeader( 'X-RT--Error' ),
+                    rt_mID = xhr.responseHeader( 'X-RT--mID' )
                 ;
                 if ( rt_error )
                 {
@@ -93,24 +129,13 @@ RT.Client.BOSH[PROTO].$poll$ = function( immediate ){
                     for(i=0,l=msgs.length; i<l; i++)
                         self.emit('receive', msgs[i]);
                 }
-                if ( rt_timestamp ) self.$timestamp$ = rt_timestamp;
-                // message(s) sent
-                if ( msgs ) self.$queue$.splice( 0, msgs.length );
-                self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
+                if ( rt_mID ) self.$mID$ = rt_mID;
+                setTimeout( listen, 0 );
             }
-        }, msgs ? ('rt_payload='+U.Url.encode( msgs.join( rt_msg ) )) : null);
+        }, null);
     };
-    self.$timer$ = setTimeout(poll, true === immediate ? 0 : self.$cfg$.pollInterval);
+    setTimeout( listen, 0 );
     return self;
-};
-RT.Client.BOSH[PROTO].send = function( payload ){
-    var self = this;
-    self.$queue$.push( String(payload) );
-    return self;
-};
-RT.Client.BOSH[PROTO].listen = function( ){
-    var self = this;
-    return self.emit( 'open' ).$poll$( true );
 };
 
 // export it

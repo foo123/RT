@@ -99,9 +99,10 @@ RT.Client.WS[PROTO].listen = function( ){
     ws.addEventListener('error', function( e ) {
         self.emit('error', e);
     });
-    ws.addEventListener('message', function( evt ) {
+    ws.addEventListener('message', function( e ) {
         self.emit('receive', e.data);
     });
+    return self;
 };
 
 // export it

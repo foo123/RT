@@ -53,9 +53,10 @@ RT.XHR = {
         xhr.__headers__ = null;
         xhr.responseHeader = function( key ) {
             if ( (null == key) || (4/*DONE*/ !== xhr.readyState) ) return null;
-            var headers = xhr.getAllResponseHeaders( ) || '';
+            return xhr.getResponseHeader( key );
+            /*var headers = xhr.getAllResponseHeaders( ) || '';
             if ( null == xhr.__headers__ ) xhr.__headers__ = RT.Util.Header.decode( headers );
-            return xhr.__headers__[HAS](key) ? xhr.__headers__[key] : null;
+            return xhr.__headers__[HAS](key) ? xhr.__headers__[key] : null;*/
         };
         xhr.responseHeaders = function( decoded ) {
             if ( 4/*DONE*/ !== xhr.readyState ) return null;

@@ -2,9 +2,10 @@
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>RT Chat Test</title>
+    <title>RT Chat Test (Poll)</title>
     <script type="text/javascript" src="../src/RT.js"></script>
     <script type="text/javascript" src="../src/RT.Poll.js"></script>
+    <script type="text/javascript" src="./chat-utils.js"></script>
     <style type="text/css">
     #output {
     position: relative;
@@ -22,11 +23,6 @@
     display: block;
     border: 1px solid #ccc;
     border-radius: 8px;
-    }
-    #user {
-    position: relative;
-    display: inline-block;
-    padding: 4px;
     }
     #send {
     position: reelative;
@@ -52,36 +48,44 @@
     position: relative;
     font-style: italic;
     display: inline-block;
+    vertical-align: top;
     }
     </style>
 </head>
 <body>
-<h2>Simple Chat Test</h2>
+<h2>Simple Chat Test (Polling)</h2>
+<hr />
 <div id="output"></div>
 <hr />
-<input id="user" type="text" value="" placeholder="User Name"/>
+<textarea id="input" onkeyup="send(event)"></textarea>
 <button id="send" onclick="send()">Send</button>
-<textarea id="input"></textarea>
+<hr />
+<b>Hint1:</b>&nbsp;&nbsp;<i>Set a username in the url, e.g ?user=user1</i><br />
+<b>Hint2:</b>&nbsp;&nbsp;<i>Urls in the text are automaticaly converted to actual links (<a href="http://benalman.com/projects/javascript-linkify/">linkified</a>)</i><br />
+<b>Hint3:</b>&nbsp;&nbsp;<i>Emoticons in the text are converted to actual icons (<a href="http://benalman.com/projects/javascript-emotify/">emotified</a>, but icons are missing at the moment)</i><br />
+<b>Hint4:</b>&nbsp;&nbsp;<i>New lines in the text are supported by using SHIFT+ENTER keys (newlinefied)</i><br />
 <script>
+var user = document.location.href.match(/[?&]user=([^&=]+)/)[1] || 'user';
 var rt_chat = RT({
-        url: './chat.php',
+        url: './chat-poll.php',
         rt_type: 'poll'
     })
     .on('receive', function( evt ){
-        var msg = RT.Util.Json.decode( evt.data||'' );
-        document.getElementById('output').innerHTML += '<div class="entry'+(msg.user===document.getElementById('user').value?' own':'')+'"><span class="user">'+msg.user+'</span><span class="message">'+msg.message+'</span>';
+        if ( !evt.data ) return;
+        var d = RT.Util.Json.decode( evt.data );
+        document.getElementById('output').innerHTML += '<div class="entry'+(d.user===user?' own':'')+'"><span class="user">'+htmlify(d.user)+'</span><span class="message">'+emotify(linkify(newlinefy(htmlify(d.message))))+'</span></div>';
     })
     .on('error', function( evt ){
         alert('ERROR: '+evt.data);
     })
     .listen( )
 ;
-function send( )
+function send( event )
 {
-    var user = RT.Util.String.trim(document.getElementById('user').value||''),
-        msg = RT.Util.String.trim(document.getElementById('input').value||'');
+    if ( event && (!key_is(event, 13) || event.shiftKey) ) return;
+    var msg = RT.Util.String.trim(document.getElementById('input').value||'');
     document.getElementById('input').value = '';
-    if ( !user.length || !msg.length ) return false;
+    if ( !msg.length ) return false;
     rt_chat.send(RT.Util.Json.encode({
         'user': user,
         'message': msg

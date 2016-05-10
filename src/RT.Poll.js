@@ -27,7 +27,7 @@ RT.Client.Poll = function Client_Poll( cfg ) {
     self.$cfg$.pollInterval = self.$cfg$.pollInterval || 1000;
     self.$timer$ = null;
     self.$xhr$ = null;
-    self.$timestamp$ = 0;
+    self.$mID$ = 0;
     self.$queue$ = [];
 };
 RT.Client.Impl['poll'] = RT.Client.Impl['short-poll'] = RT.Client.Poll;
@@ -38,11 +38,11 @@ RT.Client.Poll[PROTO].constructor = RT.Client.Poll;
 RT.Client.Poll[PROTO].$timer$ = null;
 RT.Client.Poll[PROTO].$xhr$ = null;
 RT.Client.Poll[PROTO].$queue$ = null;
-RT.Client.Poll[PROTO].$timestamp$ = null;
+RT.Client.Poll[PROTO].$mID$ = null;
 RT.Client.Poll[PROTO].dispose = function( ){
     var self = this;
     self.abort( );
-    self.$timestamp$ = null;
+    self.$mID$ = null;
     self.$queue$ = null;
     return __super__.dispose.call( self );
 };
@@ -57,19 +57,20 @@ RT.Client.Poll[PROTO].$poll$ = function( immediate ){
     var poll = function poll( ) {
         var headers = {
             'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
-            'X-RT-Receive'      : '1', // receive incoming message(s)
-            'X-RT-Timestamp'    : self.$timestamp$
+            'X-RT--Poll'        : '1', // this uses polling
+            'X-RT--Receive'     : '1', // receive incoming message(s)
+            'X-RT--mID'         : self.$mID$
         };
         var rt_msg = null, msgs = null;
         if ( self.$queue$.length )
         {
             // send message(s) on same request
-            headers['X-RT-Send'] = '1';
-            headers['X-RT-Message'] = rt_msg = RT.UUID('----------------------');
+            headers['X-RT--Send'] = '1';
+            headers['X-RT--Message'] = rt_msg = RT.UUID('----------------------');
             msgs = self.$queue$.slice( );
         }
         self.$xhr$ = XHR.create({
-            url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__NOCACHE__='+(new Date().getTime()),
+            url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
             method          : 'POST',
             responseType    : 'text',
             //mimeType        : 'text/plain; charset=utf8',
@@ -81,10 +82,10 @@ RT.Client.Poll[PROTO].$poll$ = function( immediate ){
                 self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
             },
             onComplete      : function( xhr ) {
-                var rt_msg = xhr.responseHeader( 'X-RT-Message' ),
-                    rt_close = xhr.responseHeader( 'X-RT-Close' ),
-                    rt_error = xhr.responseHeader( 'X-RT-Error' ),
-                    rt_timestamp = xhr.responseHeader( 'X-RT-Timestamp' )
+                var rt_msg = xhr.responseHeader( 'X-RT--Message' ),
+                    rt_close = xhr.responseHeader( 'X-RT--Close' ),
+                    rt_error = xhr.responseHeader( 'X-RT--Error' ),
+                    rt_mID = xhr.responseHeader( 'X-RT--mID' )
                 ;
                 if ( rt_error )
                 {
@@ -103,7 +104,7 @@ RT.Client.Poll[PROTO].$poll$ = function( immediate ){
                     for(i=0,l=msgs.length; i<l; i++)
                         self.emit('receive', msgs[i]);
                 }
-                if ( rt_timestamp ) self.$timestamp$ = rt_timestamp;
+                if ( rt_mID ) self.$mID$ = rt_mID;
                 // message(s) sent
                 if ( msgs ) self.$queue$.splice( 0, msgs.length );
                 self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);

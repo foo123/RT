@@ -13,16 +13,16 @@
         status.innerHTML = '';
         RT.XHR.create({
             method          : 'POST',
-            url             : 'post.php',
+            url             : './post.php',
             responseType    : 'text',
             //mimeType        : 'text/plain; charset=utf8',
             headers         : {
                 'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
-                'X-RT-Poll'         : '1',
-                'X-RT-Send'         : '1'
+                'X-RT--Poll'        : '1',
+                'X-RT--Send'        : '1'
             },
             onComplete          : function( xhr ) {
-                status.innerHTML = 'X-RT-Close: ' + xhr.responseHeader( 'X-RT-Close' );
+                status.innerHTML = 'X-RT--Close: ' + xhr.responseHeader( 'X-RT--Close' );
                 output.innerHTML = xhr.responseText;
             },
             onError         : function( xhr ) {
