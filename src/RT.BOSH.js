@@ -85,7 +85,6 @@ RT.Client.BOSH[PROTO].send = function( payload ){
 };
 RT.Client.BOSH[PROTO].listen = function( ){
     var self = this;
-    self.emit( 'open' );
     var listen = function listen( ) {
         self.$recv$ = XHR.create({
             url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
@@ -135,7 +134,8 @@ RT.Client.BOSH[PROTO].listen = function( ){
         }, null);
     };
     setTimeout( listen, 0 );
-    return self;
+    return self.emit( 'open' );
+
 };
 
 // export it

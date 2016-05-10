@@ -52,7 +52,12 @@ RT.Client.Poll[PROTO].abort = function( trigger ){
     if ( self.$xhr$ ) { self.$xhr$.abort( true===trigger ); self.$xhr$ = null; }
     return self;
 };
-RT.Client.Poll[PROTO].$poll$ = function( immediate ){
+RT.Client.Poll[PROTO].send = function( payload ){
+    var self = this;
+    self.$queue$.push( String(payload) );
+    return self;
+};
+RT.Client.Poll[PROTO].listen = function( ){
     var self = this;
     var poll = function poll( ) {
         var headers = {
@@ -111,17 +116,8 @@ RT.Client.Poll[PROTO].$poll$ = function( immediate ){
             }
         }, msgs ? ('rt_payload='+U.Url.encode( msgs.join( rt_msg ) )) : null);
     };
-    self.$timer$ = setTimeout(poll, true === immediate ? 0 : self.$cfg$.pollInterval);
-    return self;
-};
-RT.Client.Poll[PROTO].send = function( payload ){
-    var self = this;
-    self.$queue$.push( String(payload) );
-    return self;
-};
-RT.Client.Poll[PROTO].listen = function( ){
-    var self = this;
-    return self.emit( 'open' ).$poll$( true );
+    self.$timer$ = setTimeout(poll, 0);
+    return self.emit( 'open' );
 };
 
 // export it
