@@ -6,7 +6,8 @@
     <script type="text/javascript" src="../../src/RT.Poll.js"></script>
     <script type="text/javascript" src="../../src/RT.BOSH.js"></script>
     <script type="text/javascript" src="../../src/RT.WebSocket.js"></script>
-    <script type="text/javascript" src="./chat.js"></script>
+    <script type="text/javascript" src="./assets/js/chat.js"></script>
+    <link type="text/css" rel="stylesheet" href="./assets/css/skypecon.css" media="screen" />
     <style type="text/css">
     #output {
     position: relative;
@@ -52,7 +53,30 @@
     display: inline-block;
     vertical-align: top;
     }
+    .entry .sc {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    }
     </style>
+    <script type="text/javascript">
+    window._emotify = emotify;
+    emotify.emoticons('', {
+        //  >   // "smiley": [ image_url, title_text [, alt_smiley ... ] ]
+        ':-))'   : [ 'bigsmile', 'Laugh', ':-)))', ':)))', ':))' ],
+        ';-)'    : [ 'wink', 'Wink', ';)' ],
+        ':-O'    : [ 'surprised', 'Surprised', ':O' ],
+        ':-p'    : [ 'tongueout', 'Tongue out', ':p' ],
+        ':-/'    : [ 'speechless', 'Speechless' ],
+        ':-)'    : [ 'smile', 'Smile', ':)' ],
+        ':-('    : [ 'sadsmile', 'Sad', ':(', '=(', '=-(']
+    });
+    window.emotify = function( text ) {
+        return window._emotify( text, function( sc_icon, title ) {
+            return '<i class="sc sc-'+sc_icon+'" title="' + title + '"></i>';
+        });
+    };
+  </script>
     <title>RT Simple Chat Test</title>
 </head>
 <body>
@@ -67,7 +91,7 @@
     <b>Hint1:</b>&nbsp;&nbsp;<i>Set a username in the url, e.g ?user=user1</i><br />
     <b>Hint2:</b>&nbsp;&nbsp;<i>Set the RT implementation layer in the url, e.g ?use=ws, ?use=bosh</i><br />
     <b>Hint3:</b>&nbsp;&nbsp;<i>Urls in the text are automaticaly converted to actual links (<a href="http://benalman.com/projects/javascript-linkify/">linkified</a>)</i><br />
-    <b>Hint4:</b>&nbsp;&nbsp;<i>Emoticons in the text are converted to actual icons (<a href="http://benalman.com/projects/javascript-emotify/">emotified</a>, but icons are missing at the moment)</i><br />
+    <b>Hint4:</b>&nbsp;&nbsp;<i>Emoticons in the text are converted to actual icons (<a href="http://benalman.com/projects/javascript-emotify/">emotified</a>, <a href="http://www.skype.com/">Skype</a> emoticons by <a href="http://demoive.github.io/skypecon/">skypecon</a>)</i><br />
     <b>Hint5:</b>&nbsp;&nbsp;<i>New lines in the text are supported by using SHIFT+ENTER keys (newlinefied)</i><br />
 
     <script type="text/javascript">
