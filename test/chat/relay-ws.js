@@ -26,4 +26,4 @@ wss.on('connection', function( ws ) {
         }
     });
 });
-console.log('RT Chat Test (WebSockets) ws://127.0.0.1:1111');
+console.log('RT Chat Test (WebSocket) ws://127.0.0.1:1111');

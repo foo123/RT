@@ -1,9 +1,9 @@
 /**
 *  RT
-*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets
+*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/JS
 *  RT BOSH Client
 *
-*  @version: 0.1.0
+*  @version: 1.0.0
 *  https://github.com/foo123/RT
 *
 **/
@@ -25,8 +25,8 @@ RT.Client.BOSH = function Client_Bosh( cfg ) {
     if ( !(self instanceof Client_Bosh) ) return new Client_Bosh(cfg);
     __super__.constructor.call( self, cfg );
     self.$cfg$.timeout = self.$cfg$.timeout || 1000;
-    self.$send$ = null;
-    self.$recv$ = null;
+    self.$bosh$ = null;
+    self.$queue$ = [];
     self.$mID$ = 0;
 };
 RT.Client.Impl['bosh'] = RT.Client.Impl['long-poll'] = RT.Client.BOSH;
@@ -34,73 +34,53 @@ RT.Client.Impl['bosh'] = RT.Client.Impl['long-poll'] = RT.Client.BOSH;
 /* extends RT.Client class */
 RT.Client.BOSH[PROTO] = Object.create( __super__ );
 RT.Client.BOSH[PROTO].constructor = RT.Client.BOSH;
-RT.Client.BOSH[PROTO].$send$ = null;
-RT.Client.BOSH[PROTO].$recv$ = null;
+RT.Client.BOSH[PROTO].$bosh$ = null;
+RT.Client.BOSH[PROTO].$queue$ = null;
 RT.Client.BOSH[PROTO].$mID$ = null;
 RT.Client.BOSH[PROTO].dispose = function( ){
     var self = this;
-    self.abort( );
+    if ( self.$bosh$ ) { self.$bosh$.abort( false ); self.$bosh$ = null; }
+    self.$queue$ = null;
     self.$mID$ = null;
     return __super__.dispose.call( self );
 };
 RT.Client.BOSH[PROTO].abort = function( trigger ){
     var self = this;
-    //if ( self.$send$ ) { self.$send$.abort( true===trigger ); self.$send$ = null; }
-    if ( self.$recv$ ) { self.$recv$.abort( true===trigger ); self.$recv$ = null; }
-    self.$send$ = null;
-    return self;
+    if ( self.$bosh$ ) { self.$bosh$.abort( true===trigger ); self.$bosh$ = null; }
+    return __super__.abort.call( self, true===trigger );
 };
 RT.Client.BOSH[PROTO].send = function( payload ){
     var self = this;
-    XHR.create({
-        url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
-        method          : 'POST',
-        responseType    : 'text',
-        //mimeType        : 'text/plain; charset=utf8',
-        headers         : {
-            'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
-            'X-RT--BOSH'        : '1', // this uses BOSH
-            'X-RT--Send'        : '1' // this is the send channel
-        },
-        onError         : function( xhr ) {
-            self.emit('error', xhr.statusText);
-        },
-        onComplete      : function( xhr ) {
-            var rt_close = xhr.responseHeader( 'X-RT--Close' ),
-                rt_error = xhr.responseHeader( 'X-RT--Error' )
-            ;
-            if ( rt_error )
-            {
-                self.emit( 'error', rt_error );
-                return;
-            }
-            if ( rt_close )
-            {
-                self.close( );
-                return;
-            }
-        }
-    }, 'rt_payload='+U.Url.encode( String(payload) ));
+    self.$queue$.push( String(payload) );
     return self;
 };
 RT.Client.BOSH[PROTO].listen = function( ){
     var self = this;
     var listen = function listen( ) {
-        self.$recv$ = XHR.create({
-            url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
+        var headers = {
+            'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
+            'X-RT--BOSH'        : '1', // this uses BOSH
+            'X-RT--Receive'     : '1', // this is the receive channel
+            'X-RT--mID'         : self.$mID$
+        };
+        var rt_msg = null, msgs = null;
+        if ( self.$queue$.length )
+        {
+            // send message(s) on same request
+            headers['X-RT--Send'] = 'x-rt--payload';
+            headers['X-RT--Message'] = rt_msg = RT.UUID('--------_rt_msg_', '_--------');
+            msgs = self.$queue$.slice( );
+        }
+        self.$bosh$ = XHR.create({
+            url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
             timeout         : self.$cfg$.timeout,
             method          : 'POST',
             responseType    : 'text',
             //mimeType        : 'text/plain; charset=utf8',
-            headers         : {
-                'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
-                'X-RT--BOSH'        : '1', // this uses BOSH
-                'X-RT--Receive'     : '1', // this is the receive channel
-                'X-RT--mID'         : self.$mID$
-            },
+            headers         : headers,
             onError         : function( xhr ) {
                 self.emit('error', xhr.statusText);
-                self.$recv$ = null;
+                self.$bosh$ = null;
             },
             onTimeout       : function( xhr ) {
                 setTimeout( listen, 0 );
@@ -113,13 +93,11 @@ RT.Client.BOSH[PROTO].listen = function( ){
                 ;
                 if ( rt_error )
                 {
-                    self.emit( 'error', rt_error );
-                    return;
+                    return self.emit( 'error', rt_error );
                 }
                 if ( rt_close )
                 {
-                    self.close( );
-                    return;
+                    return self.close( );
                 }
                 if ( rt_msg )
                 {
@@ -129,12 +107,14 @@ RT.Client.BOSH[PROTO].listen = function( ){
                         self.emit('receive', msgs[i]);
                 }
                 if ( rt_mID ) self.$mID$ = rt_mID;
+                // message(s) sent
+                if ( msgs ) self.$queue$.splice( 0, msgs.length );
                 setTimeout( listen, 0 );
             }
-        }, null);
+        }, msgs ? ('x-rt--payload='+U.Url.encode( msgs.join( rt_msg ) )) : null);
     };
     setTimeout( listen, 0 );
-    return self.emit( 'open' );
+    return self.open( );
 
 };
 

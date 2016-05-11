@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <script type="text/javascript" src="../../src/RT.js"></script>
+    <script type="text/javascript" src="../../src/RT.Poll.js"></script>
+    <script type="text/javascript" src="../../src/RT.BOSH.js"></script>
+    <script type="text/javascript" src="../../src/RT.WebSocket.js"></script>
+    <script type="text/javascript" src="./chat.js"></script>
+    <style type="text/css">
+    #output {
+    position: relative;
+    padding: 4px;
+    font-size: 1em;
+    height: 200px;
+    overflow-y: scroll;
+    }
+    #input {
+    max-width: 100%;
+    width: 400px;
+    position: relative;
+    height: 50px;
+    padding: 4px;
+    display: inline-block;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    }
+    #send {
+    position: relative;
+    display:inline-block;
+    padding: 6px 10px;
+    cursor: pointer;
+    vertical-align: top;
+    }
+    .entry {
+    font-size: 1em;
+    position: relative;
+    display: block;
+    }
+    .entry.own {
+    color: #f00;
+    }
+    .entry .user {
+    position: relative;
+    font-weight: bold;
+    display: inline-block;
+    margin-right: 10px;
+    }
+    .entry .message {
+    position: relative;
+    font-style: italic;
+    display: inline-block;
+    vertical-align: top;
+    }
+    </style>
+    <title>RT Simple Chat Test</title>
+</head>
+<body>
+    <h2>Simple Chat Test (RT <span id="rt_impl">Poll</span>)</h2>
+    
+    <hr /><div id="output"></div><hr />
+    
+    <textarea id="input" onkeyup="send(event)"></textarea><button id="send" onclick="send()">Send</button>
+    
+    <hr />
+    
+    <b>Hint1:</b>&nbsp;&nbsp;<i>Set a username in the url, e.g ?user=user1</i><br />
+    <b>Hint2:</b>&nbsp;&nbsp;<i>Set the RT implementation layer in the url, e.g ?use=ws, ?use=bosh</i><br />
+    <b>Hint3:</b>&nbsp;&nbsp;<i>Urls in the text are automaticaly converted to actual links (<a href="http://benalman.com/projects/javascript-linkify/">linkified</a>)</i><br />
+    <b>Hint4:</b>&nbsp;&nbsp;<i>Emoticons in the text are converted to actual icons (<a href="http://benalman.com/projects/javascript-emotify/">emotified</a>, but icons are missing at the moment)</i><br />
+    <b>Hint5:</b>&nbsp;&nbsp;<i>New lines in the text are supported by using SHIFT+ENTER keys (newlinefied)</i><br />
+
+    <script type="text/javascript">
+    function userify( s )
+    {
+        return htmlify( s );
+    }
+    
+    function textify( text )
+    {
+        return emotify( linkify( newlinefy( htmlify( text ) ) ) );
+    }
+    
+    var user = document.location.href.match(/[?&]user=([^&=]+)/)[1] || 'user';
+    var output = document.getElementById('output'), input = document.getElementById('input');
+    
+    var rt_impl = (document.location.href.match(/[?&]use=([^&=]+)/)[1] || 'poll').toLowerCase();
+    if ( 'poll' !== rt_impl && 'bosh' !== rt_impl && 'ws' !== rt_impl ) rt_impl = 'poll';
+    
+    document.getElementById('rt_impl').innerHTML = 'ws' === rt_impl ? 'WebSocket' : ('bosh' === rt_impl ? 'BOSH' : 'Poll');
+    
+    var rt_chat = RT({
+            use: rt_impl,
+            endpoint: 'ws' === rt_impl ? 'ws://127.0.0.1:1111' : ('bosh' === rt_impl ? './relay.php?bosh=1' : './relay.php?poll=1')
+        })
+        .on('receive', function( evt ){
+            if ( !evt.data ) return;
+            var m = RT.Util.Json.decode( evt.data );
+            output.innerHTML += '<div class="entry'+(m.user===user?' own':'')+'">\
+            <span class="user">' + userify( m.user ) + '</span>\
+            <span class="message">' + textify( m.message ) + '</span>\
+            </div>';
+        })
+        /*.on('open', function( ){
+            alert('OPENED');
+        })*/
+        .on('close', function( ){
+            alert('CLOSED!');
+        })
+        .on('error', function( evt ){
+            alert('ERROR: '+evt.data);
+        })
+        .init( )
+    ;
+    
+    function send( event )
+    {
+        if ( RT.Client.OPENED !== rt_chat.status ) return;
+        if ( event && (!key_is(event, 13) || event.shiftKey) ) return;
+        var msg = RT.Util.String.trim( input.value||'' );
+        input.value = '';
+        if ( !msg.length ) return;
+        rt_chat.send(RT.Util.Json.encode({
+            'user': user,
+            'message': msg
+        }));
+    }
+    </script>
+</body>
+</html>

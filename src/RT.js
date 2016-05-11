@@ -1,8 +1,8 @@
 /**
 *  RT
-*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets
+*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/JS
 *
-*  @version: 0.1.0
+*  @version: 1.0.0
 *  https://github.com/foo123/RT
 *
 **/
@@ -17,110 +17,241 @@ else
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty',
     KEYS = Object.keys, toString = Object[PROTO].toString,
+    isNode = ('undefined' !== typeof global) && ('[object global]' === toString.call(global)),
     CC = String.fromCharCode,
     trim_re = /^\s+|\s+$/g,
     trim = String[PROTO].trim 
         ? function( s ) { return s.trim( ); }
         : function( s ) { return s.replace(trim_re, ''); },
     a2b_re = /[^A-Za-z0-9\+\/\=]/g, hex_re = /\x0d\x0a/g,
-    XHR = window.XMLHttpRequest
+    XHR = isNode
+    ? null
+    : (window.XMLHttpRequest
     ? function( ){ return new XMLHttpRequest( ); }
-    : function( ){ return new ActiveXObject('Microsoft.XMLHTTP'); /* or ActiveXObject('Msxml2.XMLHTTP'); ??*/ },
+    : function( ){ return new ActiveXObject('Microsoft.XMLHTTP'); /* or ActiveXObject('Msxml2.XMLHTTP'); ??*/ }),
     UUID = 0
 ;
 
 function RT( cfg )
 {
     cfg = cfg || { };
-    var type = (cfg.rt_type || 'default').toLowerCase( );
+    var type = (cfg.use || cfg.rt_type || 'default').toLowerCase( );
     return RT.Client.Impl[HAS](type) ? new RT.Client.Impl[type]( cfg ) : new RT.Client( cfg );
 }
-RT.VERSION = '0.1.0';
+RT.VERSION = '1.0.0';
+
+RT.Platform = {
+    Node: isNode
+};
 
 RT.XHR = {
     create: function( o, payload ) {
         o = o || {};
-        var xhr = XHR( ), trigger_abort = true;
-        xhr._abort = xhr.abort;
-        xhr._aborted = false;
-        xhr.abort = function( and_trigger ){
-            if ( xhr._aborted ) return;
-            if ( false === and_trigger ) trigger_abort = false;
-            try{ xhr._abort( ); }catch(e){ }
-            xhr._aborted = true;
-            trigger_abort = true;
-        };
-        xhr.__headers__ = null;
-        xhr.responseHeader = function( key ) {
-            if ( (null == key) || (4/*DONE*/ !== xhr.readyState) ) return null;
-            return xhr.getResponseHeader( key );
-            /*var headers = xhr.getAllResponseHeaders( ) || '';
-            if ( null == xhr.__headers__ ) xhr.__headers__ = RT.Util.Header.decode( headers );
-            return xhr.__headers__[HAS](key) ? xhr.__headers__[key] : null;*/
-        };
-        xhr.responseHeaders = function( decoded ) {
-            if ( 4/*DONE*/ !== xhr.readyState ) return null;
-            var headers = xhr.getAllResponseHeaders( ) || '';
-            if ( null == xhr.__headers__ ) xhr.__headers__ = RT.Util.Header.decode( headers );
-            return true===decoded ? xhr.__headers__ : headers;
-        };
-        if ( !o.url ) return xhr;
-        xhr.open( o.method||'GET', o.url, !o.sync );
-        xhr.responseType = o.responseType || 'text';
-        if ( o.headers ) RT.Util.Header.encode( o.headers, xhr );
-        if ( o.mimeType ) xhr.overrideMimeType( o.mimeType );
-        //xhr.setRequestHeader('Content-Type', 'text/plain; charset=utf8');
-        //xhr.overrideMimeType('text/plain; charset=utf8');
-        xhr.timeout = o.timeout || 30000; // 30 secs default timeout
-        if ( o.onProgress )
+        if ( isNode )
         {
-            xhr.onprogress = function( ) {
-                o.onProgress( xhr );
-            };
+            if ( !o.url ) return null;
+            var url = '[object Object]' === toString.call(o.url) ? o.url : require('url').parse( o.url ),
+                
+                options = {
+                    method      : o.method || 'GET',
+                    agent       : false,
+                    protocol    : url.protocol,
+                    host        : url.hostname,
+                    hostname    : url.hostname,
+                    port        : url.port || 80,
+                    path        : (url.pathname||'/')+(url.query?('?'+url.query):'')
+                },
+                request =  'https:' === options.protocol ? require('https').request : require('http').request,
+                
+                xhr = {
+                    readyState: 0 /*UNSENT*/,
+                    status: null,
+                    statusText: null,
+                    responseType: o.responseType || 'text',
+                    responseURL: null,
+                    response: null,
+                    responseText: null,
+                    responseXml: null,
+                    headers: null,
+                    __headers__: null,
+                    send: function( payload ) {
+                        if ( null != payload )
+                        {
+                            payload = String( payload );
+                            hr.setHeader( 'Content-Length', payload.length.toString() );
+                            hr.write( payload );
+                        }
+                        hr.end( );
+                    },
+                    abort: function( ) {
+                        hr.abort( );
+                    },
+                    getAllResponseHeaders: function( ) {
+                        return xhr.headers;
+                    },
+                    getResponseHeader: function( key ) {
+                        if ( (null == key) || (4/*DONE*/ !== xhr.readyState) ) return null;
+                        var headers = xhr.__headers__ || {};
+                        return headers[HAS](key) ? headers[key] : null;
+                    },
+                    responseHeader: function( key ) {
+                        return xhr.getResponseHeader( key );
+                    },
+                    responseHeaders: function( decoded ) {
+                        if ( 4/*DONE*/ !== xhr.readyState ) return null;
+                        return true===decoded ? xhr.__headers__ : xhr.headers;
+                    }
+                },
+                
+                hr = request(options, function( response ) {
+                    var xdata = '', data_sent = 0;
+                    xhr.readyState = 1; /*OPENED*/
+                    if ( o.onStateChange ) o.onStateChange( xhr );
+                    xhr.headers = response.rawHeaders.join("\r\n");
+                    xhr.__headers__ = response.headers;
+                    xhr.responseURL = response.url || null;
+                    xhr.readyState = 2; /*HEADERS_RECEIVED*/
+                    xhr.status = response.statusCode || null;
+                    xhr.statusText = response.statusMessage || null;
+                    if ( o.onStateChange ) o.onStateChange( xhr );
+                    response.on('data', function( chunk ){
+                        xdata += chunk.toString( );
+                        if ( !data_sent )
+                        {
+                            data_sent = 1;
+                            xhr.readyState = 3; /*LOADING*/
+                            if ( o.onStateChange ) o.onStateChange( xhr );
+                            if ( o.onLoadStart ) o.onLoadStart( xhr );
+                        }
+                        if ( o.onProgress ) o.onProgress( xhr );
+                    });
+                    response.on('end', function( ){
+                        xhr.readyState = 4; /*DONE*/
+                        xhr.responseType = 'text';
+                        xhr.response = xhr.responseText = xdata;
+                        if ( o.onStateChange ) o.onStateChange( xhr );
+                        if ( o.onLoadEnd ) o.onLoadEnd( xhr );
+                        if ( (4/*DONE*/ === xhr.readyState) )
+                        {
+                            if ( 200 === xhr.status )
+                            {
+                                if ( o.onComplete ) o.onComplete( xhr );
+                            }
+                            else
+                            {
+                                if ( o.onRequestError ) o.onRequestError( xhr );
+                                else if ( o.onError ) o.onError( xhr );
+                            }
+                        }
+                    });
+                    response.on('error', function( ee ){
+                        xhr.statusText = ee.toString( );
+                        if ( o.onError ) o.onError( xhr );
+                    });
+                })
+            ;
+            hr.setTimeout(o.timeout || 30000, function( e ){
+                if ( o.onTimeout ) o.onTimeout( xhr );
+            });
+            hr.on('abort', function( ee ){
+                if ( o.onAbort ) o.onAbort( xhr );
+            });
+            hr.on('error', function( ee ){
+                xhr.statusText = ee.toString( );
+                if ( o.onError ) o.onError( xhr );
+            });
+            
+            if ( o.headers ) RT.Util.Header.encode( o.headers, null, hr );
+            //if ( o.mimeType ) hr.overrideMimeType( o.mimeType );
+            hr.setHeader('Connection', 'Keep-Alive');
+            
+            if ( arguments.length > 1 ) xhr.send( payload );
+            return xhr;
         }
-        if ( o.onLoadStart )
+        else
         {
-            xhr.onloadstart = function( ) {
-                o.onLoadStart( xhr );
+            var xhr = XHR( ), trigger_abort = true;
+            xhr._abort = xhr.abort;
+            xhr._aborted = false;
+            xhr.abort = function( and_trigger ){
+                if ( xhr._aborted ) return;
+                if ( false === and_trigger ) trigger_abort = false;
+                try{ xhr._abort( ); }catch(e){ }
+                xhr._aborted = true;
+                trigger_abort = true;
             };
-        }
-        if ( o.onLoadEnd )
-        {
-            xhr.onloadend = function( ) {
-                o.onLoadEnd( xhr );
+            xhr.__headers__ = null;
+            xhr.responseHeader = function( key ) {
+                if ( (null == key) || (4/*DONE*/ !== xhr.readyState) ) return null;
+                return xhr.getResponseHeader( key );
+                /*var headers = xhr.getAllResponseHeaders( ) || '';
+                if ( null == xhr.__headers__ ) xhr.__headers__ = RT.Util.Header.decode( headers );
+                return xhr.__headers__[HAS](key) ? xhr.__headers__[key] : null;*/
             };
-        }
-        if ( !o.sync && o.onStateChange )
-        {
-            xhr.onreadystatechange = function( ) {
-                o.onStateChange( xhr );
+            xhr.responseHeaders = function( decoded ) {
+                if ( 4/*DONE*/ !== xhr.readyState ) return null;
+                var headers = xhr.getAllResponseHeaders( ) || '';
+                if ( null == xhr.__headers__ ) xhr.__headers__ = RT.Util.Header.decode( headers );
+                return true===decoded ? xhr.__headers__ : headers;
             };
-        }
-        xhr.onload = function( ) {
-            if ( (4/*DONE*/ === xhr.readyState) )
+            if ( !o.url ) return xhr;
+            xhr.open( o.method||'GET', o.url, !o.sync );
+            xhr.responseType = o.responseType || 'text';
+            if ( o.headers ) RT.Util.Header.encode( o.headers, xhr );
+            if ( o.mimeType ) xhr.overrideMimeType( o.mimeType );
+            //xhr.setRequestHeader('Content-Type', 'text/plain; charset=utf8');
+            //xhr.overrideMimeType('text/plain; charset=utf8');
+            xhr.timeout = o.timeout || 30000; // 30 secs default timeout
+            if ( o.onProgress )
             {
-                if ( 200 === xhr.status )
-                {
-                    if ( o.onComplete ) o.onComplete( xhr );
-                }
-                else
-                {
-                    if ( o.onRequestError ) o.onRequestError( xhr );
-                    else if ( o.onError ) o.onError( xhr );
-                }
+                xhr.onprogress = function( ) {
+                    o.onProgress( xhr );
+                };
             }
-        };
-        xhr.onabort = function( ) {
-            if ( trigger_abort && o.onAbort ) o.onAbort( xhr );
-        };
-        xhr.onerror = function( ) {
-            if ( o.onError ) o.onError( xhr );
-        };
-        xhr.ontimeout = function( ) {
-            if ( o.onTimeout ) o.onTimeout( xhr );
-        };
-        if ( arguments.length > 1 ) xhr.send( payload );
-        return xhr;
+            if ( o.onLoadStart )
+            {
+                xhr.onloadstart = function( ) {
+                    o.onLoadStart( xhr );
+                };
+            }
+            if ( o.onLoadEnd )
+            {
+                xhr.onloadend = function( ) {
+                    o.onLoadEnd( xhr );
+                };
+            }
+            if ( !o.sync && o.onStateChange )
+            {
+                xhr.onreadystatechange = function( ) {
+                    o.onStateChange( xhr );
+                };
+            }
+            xhr.onload = function( ) {
+                if ( (4/*DONE*/ === xhr.readyState) )
+                {
+                    if ( 200 === xhr.status )
+                    {
+                        if ( o.onComplete ) o.onComplete( xhr );
+                    }
+                    else
+                    {
+                        if ( o.onRequestError ) o.onRequestError( xhr );
+                        else if ( o.onError ) o.onError( xhr );
+                    }
+                }
+            };
+            xhr.onabort = function( ) {
+                if ( trigger_abort && o.onAbort ) o.onAbort( xhr );
+            };
+            xhr.onerror = function( ) {
+                if ( o.onError ) o.onError( xhr );
+            };
+            xhr.ontimeout = function( ) {
+                if ( o.onTimeout ) o.onTimeout( xhr );
+            };
+            if ( arguments.length > 1 ) xhr.send( payload );
+            return xhr;
+        }
     }
 };
 
@@ -350,19 +481,19 @@ RT.Util = {
     },
     
     Header: {
-        encode: function( headers, xmlHttpRequest, httpServerResponse ) {
+        encode: function( headers, xmlHttpRequest, httpRequestResponse ) {
             var header = '';
             if ( !headers ) return xhr ? xhr : header;
             var keys = KEYS(headers), key, i, l, k, kl, CRLF = RT.Const.CRLF;
-            if ( httpServerResponse )
+            if ( httpRequestResponse )
             {
                 for(i=0,l=keys.length; i<l; i++)
                 {
                     key = keys[i];
                     // both single value and array
-                    httpServerResponse.setHeader(key, headers[key]);
+                    httpRequestResponse.setHeader(key, headers[key]);
                 }
-                return httpServerResponse;
+                return httpRequestResponse;
             }
             else if ( xmlHttpRequest )
             {
@@ -450,6 +581,7 @@ RT.Client.DESTROYED = 0;
 RT.Client.OPENED = 2;
 RT.Client.CLOSED = 4;
 RT.Client.PENDING = 8;
+RT.Client.ABORTED = 16;
 
 RT.Client[PROTO] = {
      constructor: RT.Client
@@ -519,20 +651,30 @@ RT.Client[PROTO] = {
         if ( !handler.length ) delete self.$event$[event];
         return self;
     }
-    ,abort: function( trigger ){
-        return true === trigger ? this.emit('abort') : this;
+    ,abort: function( trigger, e ){
+        this.status = RT.Client.ABORTED;
+        return true === trigger ? this.emit( 'abort', e ) : this;
     }
-    ,open: function( ){
-        return this.emit('open');
+    ,open: function( e ){
+        this.status = RT.Client.OPENED;
+        return this.emit( 'open', e );
     }
-    ,close: function( ){
-        return this.abort( false ).emit('close');
+    ,close: function( e ){
+        this.status = RT.Client.CLOSED;
+        return this.emit( 'close', e );
     }
     ,send: function( payload ){
         return this;
     }
     ,listen: function( ){
         return this;
+    }
+    ,init: function( ){
+        var self = this;
+        setTimeout(function(){
+            self.listen( );
+        }, 40);
+        return self;
     }
 };
 // aliases

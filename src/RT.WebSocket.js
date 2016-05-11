@@ -1,9 +1,9 @@
 /**
 *  RT
-*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets
+*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/JS
 *  RT WebSocket Client (w/ websocket shim)
 *
-*  @version: 0.1.0
+*  @version: 1.0.0
 *  https://github.com/foo123/RT
 *
 **/
@@ -18,7 +18,7 @@ else
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toString,
     __super__ = RT.Client[PROTO], U = RT.Util,
-    WebSocket = window.WebSocket || window.MozWebSocket || window.WebkitWebSocket
+    WebSocket = RT.Platform.Node ? require('ws') : (window.WebSocket || window.MozWebSocket || window.WebkitWebSocket)
 ;
 
 function load_websocket_shim( cb )
@@ -52,7 +52,7 @@ function load_websocket_shim( cb )
     script_websocket.setAttribute('src', base_url+'/lib/ws/web_socket.js');
     head.appendChild( script_websocket );
 }
-if ( !WebSocket ) load_websocket_shim(function( ){ WebSocket = window.WebSocket; });
+if ( !RT.Platform.Node && !WebSocket ) load_websocket_shim(function( ){ WebSocket = window.WebSocket; });
 
 RT.Client.WS = function Client_WS( config ) {
     var self = this;
@@ -73,13 +73,18 @@ RT.Client.WS[PROTO].dispose = function( ){
 };
 RT.Client.WS[PROTO].abort = function( ){
     var self = this, ws = self.$ws$;
-    if ( ws && (WebSocket.OPEN === ws.readyState) ) ws.close( );
+    if ( ws && (WebSocket.OPEN === ws.readyState) )
+    {
+        ws.close( );
+        __super__.abort.call( self, true );
+    }
     self.$ws$ = null;
     return self;
 };
-RT.Client.WS[PROTO].close = function( ){
+RT.Client.WS[PROTO].close = function( e ){
     var self = this, ws = self.$ws$;
     if ( ws && (WebSocket.OPEN === ws.readyState) ) ws.close( );
+    __super__.close.call( self, e );
     return self;
 };
 RT.Client.WS[PROTO].send = function( payload ){
@@ -89,18 +94,26 @@ RT.Client.WS[PROTO].send = function( payload ){
 };
 RT.Client.WS[PROTO].listen = function( ){
     var self = this, ws;
-    ws = self.$ws$ = new WebSocket( self.$cfg$.url );
+    if ( !WebSocket )
+    {
+        // wait until WebSocket is installed, if needed
+        setTimeout(function( ){
+            self.listen( );
+        }, 100);
+        return self;
+    }
+    ws = self.$ws$ = new WebSocket( self.$cfg$.endpoint );
     ws.addEventListener('open', function( e ) {
-        self.emit('open', e);
+        self.open( e );
     });
     ws.addEventListener('close', function( e ) {
-        self.emit('close', e);
+        self.close( e );
     });
     ws.addEventListener('error', function( e ) {
-        self.emit('error', e);
+        self.emit( 'error', e );
     });
     ws.addEventListener('message', function( e ) {
-        self.emit('receive', e.data);
+        self.emit( 'receive', e.data );
     });
     return self;
 };

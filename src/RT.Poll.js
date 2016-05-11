@@ -1,9 +1,9 @@
 /**
 *  RT
-*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets
+*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/JS
 *  RT Poll Client
 *
-*  @version: 0.1.0
+*  @version: 1.0.0
 *  https://github.com/foo123/RT
 *
 **/
@@ -41,7 +41,8 @@ RT.Client.Poll[PROTO].$queue$ = null;
 RT.Client.Poll[PROTO].$mID$ = null;
 RT.Client.Poll[PROTO].dispose = function( ){
     var self = this;
-    self.abort( );
+    if ( self.$timer$ ) { clearTimeout( self.$timer$ ); self.$timer$ = null; }
+    if ( self.$xhr$ ) { self.$xhr$.abort( false ); self.$xhr$ = null; }
     self.$mID$ = null;
     self.$queue$ = null;
     return __super__.dispose.call( self );
@@ -50,7 +51,7 @@ RT.Client.Poll[PROTO].abort = function( trigger ){
     var self = this;
     if ( self.$timer$ ) { clearTimeout( self.$timer$ ); self.$timer$ = null; }
     if ( self.$xhr$ ) { self.$xhr$.abort( true===trigger ); self.$xhr$ = null; }
-    return self;
+    return __super__.abort.call( self, true===trigger );
 };
 RT.Client.Poll[PROTO].send = function( payload ){
     var self = this;
@@ -70,21 +71,21 @@ RT.Client.Poll[PROTO].listen = function( ){
         if ( self.$queue$.length )
         {
             // send message(s) on same request
-            headers['X-RT--Send'] = '1';
-            headers['X-RT--Message'] = rt_msg = RT.UUID('----------------------');
+            headers['X-RT--Send'] = 'x-rt--payload';
+            headers['X-RT--Message'] = rt_msg = RT.UUID('--------_rt_msg_', '_--------');
             msgs = self.$queue$.slice( );
         }
         self.$xhr$ = XHR.create({
-            url             : self.$cfg$.url + (-1 < self.$cfg$.url.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
+            url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
             method          : 'POST',
             responseType    : 'text',
             //mimeType        : 'text/plain; charset=utf8',
             headers         : headers,
             onError         : function( xhr ) {
-                self.emit('error', xhr.statusText);
+                self.emit( 'error', xhr.statusText );
             },
             onTimeout       : function( xhr ) {
-                self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
+                self.$timer$ = setTimeout( poll, self.$cfg$.pollInterval );
             },
             onComplete      : function( xhr ) {
                 var rt_msg = xhr.responseHeader( 'X-RT--Message' ),
@@ -94,30 +95,27 @@ RT.Client.Poll[PROTO].listen = function( ){
                 ;
                 if ( rt_error )
                 {
-                    self.emit( 'error', rt_error );
-                    return;
+                    return self.emit( 'error', rt_error );
                 }
                 if ( rt_close )
                 {
-                    self.close( );
-                    return;
+                    return self.close( );
                 }
                 if ( rt_msg )
                 {
                     // at the same time, handle incoming message(s)
                     var msgs = (xhr.responseText||'').split( rt_msg ), i, l;
-                    for(i=0,l=msgs.length; i<l; i++)
-                        self.emit('receive', msgs[i]);
+                    for(i=0,l=msgs.length; i<l; i++) self.emit( 'receive', msgs[i] );
                 }
                 if ( rt_mID ) self.$mID$ = rt_mID;
                 // message(s) sent
                 if ( msgs ) self.$queue$.splice( 0, msgs.length );
                 self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
             }
-        }, msgs ? ('rt_payload='+U.Url.encode( msgs.join( rt_msg ) )) : null);
+        }, msgs ? ('x-rt--payload='+U.Url.encode( msgs.join( rt_msg ) )) : null);
     };
-    self.$timer$ = setTimeout(poll, 0);
-    return self.emit( 'open' );
+    self.$timer$ = setTimeout( poll, 0 );
+    return self.open( );
 };
 
 // export it
