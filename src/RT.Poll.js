@@ -42,7 +42,7 @@ RT.Client.Poll[PROTO].$mID$ = null;
 RT.Client.Poll[PROTO].dispose = function( ){
     var self = this;
     if ( self.$timer$ ) { clearTimeout( self.$timer$ ); self.$timer$ = null; }
-    if ( self.$xhr$ ) { self.$xhr$.abort( false ); self.$xhr$ = null; }
+    if ( self.$xhr$ ) { self.$xhr$.abort( ); self.$xhr$ = null; }
     self.$mID$ = null;
     self.$queue$ = null;
     return __super__.dispose.call( self );
@@ -50,7 +50,7 @@ RT.Client.Poll[PROTO].dispose = function( ){
 RT.Client.Poll[PROTO].abort = function( trigger ){
     var self = this;
     if ( self.$timer$ ) { clearTimeout( self.$timer$ ); self.$timer$ = null; }
-    if ( self.$xhr$ ) { self.$xhr$.abort( true===trigger ); self.$xhr$ = null; }
+    if ( self.$xhr$ ) { self.$xhr$.abort( ); self.$xhr$ = null; }
     return __super__.abort.call( self, true===trigger );
 };
 RT.Client.Poll[PROTO].send = function( payload ){
@@ -82,35 +82,47 @@ RT.Client.Poll[PROTO].listen = function( ){
             //mimeType        : 'text/plain; charset=utf8',
             headers         : headers,
             onError         : function( xhr ) {
+                self.$xhr$ = null;
                 self.emit( 'error', xhr.statusText );
             },
             onTimeout       : function( xhr ) {
+                self.$xhr$ = null;
                 self.$timer$ = setTimeout( poll, self.$cfg$.pollInterval );
             },
             onComplete      : function( xhr ) {
-                var rt_msg = xhr.responseHeader( 'X-RT--Message' ),
-                    rt_close = xhr.responseHeader( 'X-RT--Close' ),
-                    rt_error = xhr.responseHeader( 'X-RT--Error' ),
-                    rt_mID = xhr.responseHeader( 'X-RT--mID' )
+                var rt_msg = xhr.getResponseHeader( 'X-RT--Message' ),
+                    rt_close = xhr.getResponseHeader( 'X-RT--Close' ),
+                    rt_error = xhr.getResponseHeader( 'X-RT--Error' ),
+                    rt_mID = xhr.getResponseHeader( 'X-RT--mID' )
                 ;
                 if ( rt_error )
                 {
+                    self.$xhr$ = null;
                     return self.emit( 'error', rt_error );
                 }
                 if ( rt_close )
                 {
+                    self.$xhr$ = null;
                     return self.close( );
                 }
-                if ( rt_msg )
-                {
-                    // at the same time, handle incoming message(s)
-                    var msgs = (xhr.responseText||'').split( rt_msg ), i, l;
-                    for(i=0,l=msgs.length; i<l; i++) self.emit( 'receive', msgs[i] );
-                }
+                
                 if ( rt_mID ) self.$mID$ = rt_mID;
                 // message(s) sent
                 if ( msgs ) self.$queue$.splice( 0, msgs.length );
-                self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
+                
+                if ( rt_msg )
+                {
+                    // at the same time, handle incoming message(s)
+                    var received = (xhr.responseText||'').split( rt_msg ), i, l;
+                    for(i=0,l=received.length; i<l; i++) self.emit( 'receive', received[i] );
+                }
+                else if ( !!xhr.responseText )
+                {
+                    self.emit( 'receive', xhr.responseText );
+                }
+                
+                self.$xhr$ = null;
+                self.$timer$ = setTimeout( poll, self.$cfg$.pollInterval );
             }
         }, msgs ? ('x-rt--payload='+U.Url.encode( msgs.join( rt_msg ) )) : null);
     };

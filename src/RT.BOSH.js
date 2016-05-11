@@ -39,14 +39,14 @@ RT.Client.BOSH[PROTO].$queue$ = null;
 RT.Client.BOSH[PROTO].$mID$ = null;
 RT.Client.BOSH[PROTO].dispose = function( ){
     var self = this;
-    if ( self.$bosh$ ) { self.$bosh$.abort( false ); self.$bosh$ = null; }
+    if ( self.$bosh$ ) { self.$bosh$.abort( ); self.$bosh$ = null; }
     self.$queue$ = null;
     self.$mID$ = null;
     return __super__.dispose.call( self );
 };
 RT.Client.BOSH[PROTO].abort = function( trigger ){
     var self = this;
-    if ( self.$bosh$ ) { self.$bosh$.abort( true===trigger ); self.$bosh$ = null; }
+    if ( self.$bosh$ ) { self.$bosh$.abort( ); self.$bosh$ = null; }
     return __super__.abort.call( self, true===trigger );
 };
 RT.Client.BOSH[PROTO].send = function( payload ){
@@ -58,6 +58,7 @@ RT.Client.BOSH[PROTO].listen = function( ){
     var self = this;
     var listen = function listen( ) {
         var headers = {
+            'Connection'        : 'Keep-Alive',
             'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
             'X-RT--BOSH'        : '1', // this uses BOSH
             'X-RT--Receive'     : '1', // this is the receive channel
@@ -79,36 +80,46 @@ RT.Client.BOSH[PROTO].listen = function( ){
             //mimeType        : 'text/plain; charset=utf8',
             headers         : headers,
             onError         : function( xhr ) {
-                self.emit('error', xhr.statusText);
                 self.$bosh$ = null;
+                self.emit( 'error', xhr.statusText );
             },
             onTimeout       : function( xhr ) {
+                self.$bosh$ = null;
                 setTimeout( listen, 0 );
             },
             onComplete      : function( xhr ) {
-                var rt_msg = xhr.responseHeader( 'X-RT--Message' ),
-                    rt_close = xhr.responseHeader( 'X-RT--Close' ),
-                    rt_error = xhr.responseHeader( 'X-RT--Error' ),
-                    rt_mID = xhr.responseHeader( 'X-RT--mID' )
+                var rt_msg = xhr.getResponseHeader( 'X-RT--Message' ),
+                    rt_close = xhr.getResponseHeader( 'X-RT--Close' ),
+                    rt_error = xhr.getResponseHeader( 'X-RT--Error' ),
+                    rt_mID = xhr.getResponseHeader( 'X-RT--mID' )
                 ;
                 if ( rt_error )
                 {
+                    self.$bosh$ = null;
                     return self.emit( 'error', rt_error );
                 }
                 if ( rt_close )
                 {
+                    self.$bosh$ = null;
                     return self.close( );
                 }
-                if ( rt_msg )
-                {
-                    // at the same time, handle incoming message(s)
-                    var msgs = (xhr.responseText||'').split( rt_msg ), i, l;
-                    for(i=0,l=msgs.length; i<l; i++)
-                        self.emit('receive', msgs[i]);
-                }
+                
                 if ( rt_mID ) self.$mID$ = rt_mID;
                 // message(s) sent
                 if ( msgs ) self.$queue$.splice( 0, msgs.length );
+                
+                if ( rt_msg )
+                {
+                    // at the same time, handle incoming message(s)
+                    var received = (xhr.responseText||'').split( rt_msg ), i, l;
+                    for(i=0,l=received.length; i<l; i++) self.emit( 'receive', received[i] );
+                }
+                else if ( !!xhr.responseText )
+                {
+                    self.emit( 'receive', xhr.responseText );
+                }
+                
+                self.$bosh$ = null;
                 setTimeout( listen, 0 );
             }
         }, msgs ? ('x-rt--payload='+U.Url.encode( msgs.join( rt_msg ) )) : null);

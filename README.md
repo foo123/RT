@@ -10,6 +10,8 @@ Unified Node/XPCOM/JS client-side real-time communication with underlying implem
 * [WebSocket](https://en.wikipedia.org/wiki/WebSocket)
 
 
+**Note** `RT` is not only a simple framework around real-time layer implementations, it is also a small protocol additional to an implementation, which enables optimum performance, e.g by multiplexing multiple requests transparently (where applicable).
+
 
 **Example API**
 
@@ -48,7 +50,7 @@ var rt_chat = RT({
         <span class="message">' + textify( m.message ) + '</span>\
         </div>';
     })
-    /*.on('open', function( ){
+    /*.one('open', function( ){
         alert('OPENED');
     })*/
     .on('close', function( ){

@@ -24,11 +24,6 @@ var PROTO = 'prototype', HAS = 'hasOwnProperty',
         ? function( s ) { return s.trim( ); }
         : function( s ) { return s.replace(trim_re, ''); },
     a2b_re = /[^A-Za-z0-9\+\/\=]/g, hex_re = /\x0d\x0a/g,
-    XHR = isNode
-    ? null
-    : (window.XMLHttpRequest
-    ? function( ){ return new XMLHttpRequest( ); }
-    : function( ){ return new ActiveXObject('Microsoft.XMLHTTP'); /* or ActiveXObject('Msxml2.XMLHTTP'); ??*/ }),
     UUID = 0
 ;
 
@@ -38,196 +33,133 @@ function RT( cfg )
     var type = (cfg.use || cfg.rt_type || 'default').toLowerCase( );
     return RT.Client.Impl[HAS](type) ? new RT.Client.Impl[type]( cfg ) : new RT.Client( cfg );
 }
+
 RT.VERSION = '1.0.0';
 
 RT.Platform = {
     Node: isNode
 };
 
-RT.XHR = {
-    create: function( o, payload ) {
+RT.XHR = function XHR( send, abort ){
+    var xhr = this, aborted = false;
+    xhr.readyState = XHR.UNSENT;
+    xhr.status = null;
+    xhr.statusText = null;
+    xhr.responseType = 'text';
+    xhr.responseURL = null;
+    xhr.response = null;
+    xhr.responseText = null;
+    xhr.responseXml = null;
+    xhr._rawHeaders = null;
+    xhr._headers = null;
+    xhr.send = function( payload ) {
+        if ( aborted || (XHR.UNSENT !== xhr.readyState) ) return xhr;
+        if ( send ) send( payload );
+        xhr.readyState = XHR.OPENED;
+        return xhr;
+    };
+    xhr.abort = function( ){
+        if ( aborted ) return;
+        aborted = true;
+        if ( abort ) abort( );
+        return xhr;
+    };
+    xhr.getAllResponseHeaders = function( decoded ) {
+        if ( XHR.DONE !== xhr.readyState ) return null;
+        return true===decoded ? xhr._headers : xhr._rawHeaders;
+    };
+    xhr.getResponseHeader = function( key ) {
+        if ( (null == key) || (XHR.DONE !== xhr.readyState) ) return null;
+        var headers = xhr._headers || {};
+        return headers[HAS](key) ? headers[key] : null;
+    };
+    xhr.dispose = function( ) {
+        xhr.readyState = null;
+        xhr.status = null;
+        xhr.statusText = null;
+        xhr.responseType = null;
+        xhr.responseURL = null;
+        xhr.response = null;
+        xhr.responseText = null;
+        xhr.responseXml = null;
+        xhr._rawHeaders = null;
+        xhr._headers = null;
+        //xhr.send = null;
+        //xhr.abort = null;
+        return xhr;
+    };
+};
+RT.XHR.UNSENT = 0;
+RT.XHR.OPENED = 1;
+RT.XHR.HEADERS_RECEIVED = 2;
+RT.XHR.LOADING = 3;
+RT.XHR.DONE = 4;
+RT.XHR.create = isNode
+    ? function( o, payload ) {
         o = o || {};
-        if ( isNode )
-        {
-            if ( !o.url ) return null;
-            var url = '[object Object]' === toString.call(o.url) ? o.url : require('url').parse( o.url ),
-                
-                options = {
-                    method      : o.method || 'GET',
-                    agent       : false,
-                    protocol    : url.protocol,
-                    host        : url.hostname,
-                    hostname    : url.hostname,
-                    port        : url.port || 80,
-                    path        : (url.pathname||'/')+(url.query?('?'+url.query):'')
-                },
-                request =  'https:' === options.protocol ? require('https').request : require('http').request,
-                
-                xhr = {
-                    readyState: 0 /*UNSENT*/,
-                    status: null,
-                    statusText: null,
-                    responseType: o.responseType || 'text',
-                    responseURL: null,
-                    response: null,
-                    responseText: null,
-                    responseXml: null,
-                    headers: null,
-                    __headers__: null,
-                    send: function( payload ) {
-                        if ( null != payload )
-                        {
-                            payload = String( payload );
-                            hr.setHeader( 'Content-Length', payload.length.toString() );
-                            hr.write( payload );
-                        }
-                        hr.end( );
-                    },
-                    abort: function( ) {
-                        hr.abort( );
-                    },
-                    getAllResponseHeaders: function( ) {
-                        return xhr.headers;
-                    },
-                    getResponseHeader: function( key ) {
-                        if ( (null == key) || (4/*DONE*/ !== xhr.readyState) ) return null;
-                        var headers = xhr.__headers__ || {};
-                        return headers[HAS](key) ? headers[key] : null;
-                    },
-                    responseHeader: function( key ) {
-                        return xhr.getResponseHeader( key );
-                    },
-                    responseHeaders: function( decoded ) {
-                        if ( 4/*DONE*/ !== xhr.readyState ) return null;
-                        return true===decoded ? xhr.__headers__ : xhr.headers;
-                    }
-                },
-                
-                hr = request(options, function( response ) {
-                    var xdata = '', data_sent = 0;
-                    xhr.readyState = 1; /*OPENED*/
+        if ( !o.url ) return null;
+        var url = '[object Object]' === toString.call(o.url) ? o.url : require('url').parse( o.url ),
+            $hr$, xhr,
+            options = {
+                method      : o.method || 'GET',
+                agent       : false,
+                protocol    : url.protocol,
+                host        : url.hostname,
+                hostname    : url.hostname,
+                port        : url.port || 80,
+                path        : (url.pathname||'/')+(url.query?('?'+url.query):'')
+            }
+        ;
+        
+        xhr = new RT.XHR(
+        function( payload ) {
+            if ( null != payload )
+            {
+                payload = String( payload );
+                $hr$.setHeader( 'Content-Length', payload.length.toString() );
+                $hr$.write( payload );
+            }
+            $hr$.end( );
+        },
+        function( ) {
+            $hr$.abort( );
+        });
+        
+        $hr$ = ('https:'===options.protocol?require('https').request:require('http').request)(options, function( response ) {
+            var xdata = '', data_sent = 0;
+            
+            xhr.readyState = RT.XHR.OPENED;
+            if ( o.onStateChange ) o.onStateChange( xhr );
+            
+            xhr.readyState = RT.XHR.HEADERS_RECEIVED;
+            xhr._rawHeaders = response.rawHeaders.join("\r\n");
+            xhr._headers = response.headers;
+            xhr.responseURL = response.url || null;
+            xhr.status = response.statusCode || null;
+            xhr.statusText = response.statusMessage || null;
+            if ( o.onStateChange ) o.onStateChange( xhr );
+            
+            response.on('data', function( chunk ){
+                xdata += chunk.toString( );
+                if ( !data_sent )
+                {
+                    data_sent = 1;
+                    xhr.readyState = RT.XHR.LOADING;
                     if ( o.onStateChange ) o.onStateChange( xhr );
-                    xhr.headers = response.rawHeaders.join("\r\n");
-                    xhr.__headers__ = response.headers;
-                    xhr.responseURL = response.url || null;
-                    xhr.readyState = 2; /*HEADERS_RECEIVED*/
-                    xhr.status = response.statusCode || null;
-                    xhr.statusText = response.statusMessage || null;
-                    if ( o.onStateChange ) o.onStateChange( xhr );
-                    response.on('data', function( chunk ){
-                        xdata += chunk.toString( );
-                        if ( !data_sent )
-                        {
-                            data_sent = 1;
-                            xhr.readyState = 3; /*LOADING*/
-                            if ( o.onStateChange ) o.onStateChange( xhr );
-                            if ( o.onLoadStart ) o.onLoadStart( xhr );
-                        }
-                        if ( o.onProgress ) o.onProgress( xhr );
-                    });
-                    response.on('end', function( ){
-                        xhr.readyState = 4; /*DONE*/
-                        xhr.responseType = 'text';
-                        xhr.response = xhr.responseText = xdata;
-                        if ( o.onStateChange ) o.onStateChange( xhr );
-                        if ( o.onLoadEnd ) o.onLoadEnd( xhr );
-                        if ( (4/*DONE*/ === xhr.readyState) )
-                        {
-                            if ( 200 === xhr.status )
-                            {
-                                if ( o.onComplete ) o.onComplete( xhr );
-                            }
-                            else
-                            {
-                                if ( o.onRequestError ) o.onRequestError( xhr );
-                                else if ( o.onError ) o.onError( xhr );
-                            }
-                        }
-                    });
-                    response.on('error', function( ee ){
-                        xhr.statusText = ee.toString( );
-                        if ( o.onError ) o.onError( xhr );
-                    });
-                })
-            ;
-            hr.setTimeout(o.timeout || 30000, function( e ){
-                if ( o.onTimeout ) o.onTimeout( xhr );
-            });
-            hr.on('abort', function( ee ){
-                if ( o.onAbort ) o.onAbort( xhr );
-            });
-            hr.on('error', function( ee ){
-                xhr.statusText = ee.toString( );
-                if ( o.onError ) o.onError( xhr );
+                    if ( o.onLoadStart ) o.onLoadStart( xhr );
+                }
+                if ( o.onProgress ) o.onProgress( xhr );
             });
             
-            if ( o.headers ) RT.Util.Header.encode( o.headers, null, hr );
-            //if ( o.mimeType ) hr.overrideMimeType( o.mimeType );
-            hr.setHeader('Connection', 'Keep-Alive');
-            
-            if ( arguments.length > 1 ) xhr.send( payload );
-            return xhr;
-        }
-        else
-        {
-            var xhr = XHR( ), trigger_abort = true;
-            xhr._abort = xhr.abort;
-            xhr._aborted = false;
-            xhr.abort = function( and_trigger ){
-                if ( xhr._aborted ) return;
-                if ( false === and_trigger ) trigger_abort = false;
-                try{ xhr._abort( ); }catch(e){ }
-                xhr._aborted = true;
-                trigger_abort = true;
-            };
-            xhr.__headers__ = null;
-            xhr.responseHeader = function( key ) {
-                if ( (null == key) || (4/*DONE*/ !== xhr.readyState) ) return null;
-                return xhr.getResponseHeader( key );
-                /*var headers = xhr.getAllResponseHeaders( ) || '';
-                if ( null == xhr.__headers__ ) xhr.__headers__ = RT.Util.Header.decode( headers );
-                return xhr.__headers__[HAS](key) ? xhr.__headers__[key] : null;*/
-            };
-            xhr.responseHeaders = function( decoded ) {
-                if ( 4/*DONE*/ !== xhr.readyState ) return null;
-                var headers = xhr.getAllResponseHeaders( ) || '';
-                if ( null == xhr.__headers__ ) xhr.__headers__ = RT.Util.Header.decode( headers );
-                return true===decoded ? xhr.__headers__ : headers;
-            };
-            if ( !o.url ) return xhr;
-            xhr.open( o.method||'GET', o.url, !o.sync );
-            xhr.responseType = o.responseType || 'text';
-            if ( o.headers ) RT.Util.Header.encode( o.headers, xhr );
-            if ( o.mimeType ) xhr.overrideMimeType( o.mimeType );
-            //xhr.setRequestHeader('Content-Type', 'text/plain; charset=utf8');
-            //xhr.overrideMimeType('text/plain; charset=utf8');
-            xhr.timeout = o.timeout || 30000; // 30 secs default timeout
-            if ( o.onProgress )
-            {
-                xhr.onprogress = function( ) {
-                    o.onProgress( xhr );
-                };
-            }
-            if ( o.onLoadStart )
-            {
-                xhr.onloadstart = function( ) {
-                    o.onLoadStart( xhr );
-                };
-            }
-            if ( o.onLoadEnd )
-            {
-                xhr.onloadend = function( ) {
-                    o.onLoadEnd( xhr );
-                };
-            }
-            if ( !o.sync && o.onStateChange )
-            {
-                xhr.onreadystatechange = function( ) {
-                    o.onStateChange( xhr );
-                };
-            }
-            xhr.onload = function( ) {
-                if ( (4/*DONE*/ === xhr.readyState) )
+            response.on('end', function( ){
+                xhr.readyState = RT.XHR.DONE;
+                xhr.responseType = 'text';
+                xhr.response = xhr.responseText = xdata;
+                
+                if ( o.onStateChange ) o.onStateChange( xhr );
+                if ( o.onLoadEnd ) o.onLoadEnd( xhr );
+                
+                if ( (RT.XHR.DONE === xhr.readyState) )
                 {
                     if ( 200 === xhr.status )
                     {
@@ -239,21 +171,125 @@ RT.XHR = {
                         else if ( o.onError ) o.onError( xhr );
                     }
                 }
-            };
-            xhr.onabort = function( ) {
-                if ( trigger_abort && o.onAbort ) o.onAbort( xhr );
-            };
-            xhr.onerror = function( ) {
+            });
+            
+            response.on('error', function( ee ){
+                xhr.statusText = ee.toString( );
                 if ( o.onError ) o.onError( xhr );
-            };
-            xhr.ontimeout = function( ) {
-                if ( o.onTimeout ) o.onTimeout( xhr );
-            };
-            if ( arguments.length > 1 ) xhr.send( payload );
-            return xhr;
-        }
+            });
+        });
+        
+        $hr$.setTimeout(o.timeout || 30000, function( e ){
+            if ( o.onTimeout ) o.onTimeout( xhr );
+        });
+        $hr$.on('abort', function( ee ){
+            if ( o.onAbort ) o.onAbort( xhr );
+        });
+        $hr$.on('error', function( ee ){
+            xhr.statusText = ee.toString( );
+            if ( o.onError ) o.onError( xhr );
+        });
+        
+        if ( o.headers ) RT.Util.Header.encode( o.headers, null, $hr$ );
+        //if ( o.mimeType ) $hr$.overrideMimeType( o.mimeType );
+        if ( arguments.length > 1 ) xhr.send( payload );
+        return xhr;
     }
-};
+    : function( o, payload ) {
+        o = o || {};
+        if ( !o.url ) return null;
+        var $xhr$ = window.XMLHttpRequest
+            ? new XMLHttpRequest( )
+            : new ActiveXObject( 'Microsoft.XMLHTTP' ) /* or ActiveXObject( 'Msxml2.XMLHTTP' ); ??*/,
+            
+            xhr = new RT.XHR(
+            function( payload ){
+                $xhr$.send( payload );
+            },
+            function( ){
+                $xhr$.abort( );
+            }),
+            
+            update = function( xhr, $xhr$ ) {
+                xhr.readyState = $xhr$.readyState;
+                xhr.responseType = $xhr$.responseType;
+                xhr.responseURL = $xhr$.responseURL;
+                xhr.response = $xhr$.response;
+                xhr.responseText = $xhr$.responseText;
+                xhr.responseXml = $xhr$.responseXml;
+                xhr.status = $xhr$.status;
+                xhr.statusText = $xhr$.statusText;
+                return xhr;
+            }
+        ;
+        xhr.getAllResponseHeaders = function( decoded ){
+            var headers = $xhr$.getAllResponseHeaders( );
+            return true===decoded ? RT.Util.Header.decode( headers ) : headers;
+        };
+        xhr.getResponseHeader = function( key ){
+            return $xhr$.getResponseHeader( key );
+        };
+        
+        $xhr$.open( o.method||'GET', o.url, !o.sync );
+        xhr.responseType = $xhr$.responseType = o.responseType || 'text';
+        $xhr$.timeout = o.timeout || 30000; // 30 secs default timeout
+        
+        if ( o.onProgress )
+        {
+            $xhr$.onprogress = function( ) {
+                update( xhr, $xhr$ );
+                o.onProgress( xhr );
+            };
+        }
+        if ( o.onLoadStart )
+        {
+            $xhr$.onloadstart = function( ) {
+                o.onLoadStart( update( xhr, $xhr$ ) );
+            };
+        }
+        if ( o.onLoadEnd )
+        {
+            $xhr$.onloadend = function( ) {
+                o.onLoadEnd( update( xhr, $xhr$ ) );
+            };
+        }
+        if ( !o.sync && o.onStateChange )
+        {
+            $xhr$.onreadystatechange = function( ) {
+                o.onStateChange( update( xhr, $xhr$ ) );
+            };
+        }
+        $xhr$.onload = function( ) {
+            update( xhr, $xhr$ );
+            if ( (RT.XHR.DONE === $xhr$.readyState) )
+            {
+                if ( 200 === $xhr$.status )
+                {
+                    if ( o.onComplete ) o.onComplete( xhr );
+                }
+                else
+                {
+                    if ( o.onRequestError ) o.onRequestError( xhr );
+                    else if ( o.onError ) o.onError( xhr );
+                }
+            }
+        };
+        $xhr$.onabort = function( ) {
+            if ( o.onAbort ) o.onAbort( update( xhr, $xhr$ ) );
+        };
+        $xhr$.onerror = function( ) {
+            if ( o.onError ) o.onError( update( xhr, $xhr$ ) );
+        };
+        $xhr$.ontimeout = function( ) {
+            if ( o.onTimeout ) o.onTimeout( update( xhr, $xhr$ ) );
+        };
+        
+        if ( o.headers ) RT.Util.Header.encode( o.headers, $xhr$ );
+        if ( o.mimeType ) $xhr$.overrideMimeType( o.mimeType );
+        if ( arguments.length > 1 ) xhr.send( payload );
+        return xhr;
+    }
+;
 
 RT.UUID = function( PREFIX, SUFFIX ) {
     return (PREFIX||'') + (++UUID) + '_' + (Date.now()) + '_' + Math.floor((1000*Math.random())) + (SUFFIX||'');
