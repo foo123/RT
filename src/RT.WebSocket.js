@@ -46,7 +46,7 @@ function load( path, ws_impl, cb )
         script_swf = document.createElement('script');
         script_swf.setAttribute('type', 'text/javascript');
         script_swf.setAttribute('language', 'javascript');
-        script_swf.setAttribute('src', this_script.hasAttribute('data-swfobject') ? this_script.gasAttribute('data-swfobject') : (path+'swfobject.js'));
+        script_swf.setAttribute('src', this_script.hasAttribute('data-swfobject') ? this_script.getAttribute('data-swfobject') : (path+'swfobject.js'));
         head.appendChild( script_swf );
     }
     
@@ -85,10 +85,10 @@ else
     if ( !WebSocket && !RT.Platform.WebWorker ) load('./lib/ws/', 'ws.flash.js', function( ){ WebSocket = window.WebSocket; });
 }
 
-var Client_WS = RT_Client.WS = function Client_WS( config ) {
+var Client_WS = RT_Client.WS = function Client_WS( cfg ) {
     var self = this;
-    if ( !(self instanceof Client_WS) ) return new Client_WS(config);
-    __super__.constructor.call( self, config );
+    if ( !(self instanceof Client_WS) ) return new Client_WS(cfg);
+    __super__.constructor.call( self, cfg );
     self.$ws$ = null;
 };
 RT_Client.Impl['ws'] = RT_Client.Impl['websocket'] = RT_Client.Impl['web-socket'] = Client_WS;
