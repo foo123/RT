@@ -8,6 +8,7 @@ Unified Node/XPCOM/JS client-side real-time communication with underlying implem
 * [(XHR)](https://en.wikipedia.org/wiki/XMLHttpRequest) [Polling](https://en.wikipedia.org/wiki/Polling_%28computer_science%29)
 * [BOSH](https://en.wikipedia.org/wiki/BOSH)
 * [WebSocket](https://en.wikipedia.org/wiki/WebSocket) (native/flash/Node/XPCOM support)
+* [WebRTC](https://en.wikipedia.org/wiki/WebRTC) (TODO)
 
 
 **see also:**  
