@@ -2,7 +2,7 @@
 *  RT
 *  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/XPCOM/JS
 *
-*  @version: 1.0.0
+*  @version: 1.0.1
 *  https://github.com/foo123/RT
 *
 **/
@@ -37,7 +37,7 @@ function RT( cfg )
     return RT.Client.Impl[HAS](type) ? new RT.Client.Impl[type]( cfg ) : new RT.Client( cfg );
 }
 
-RT.VERSION = '1.0.0';
+RT.VERSION = '1.0.1';
 
 RT.Platform = {
     XPCOM   : isXPCOM,

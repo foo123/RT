@@ -3,7 +3,7 @@
 *  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/XPCOM/JS
 *  RT Poll Client
 *
-*  @version: 1.0.0
+*  @version: 1.0.1
 *  https://github.com/foo123/RT
 *
 **/
@@ -63,24 +63,43 @@ RT.Client.Poll[PROTO].send = function( payload ){
 RT.Client.Poll[PROTO].listen = function( ){
     var self = this;
     var poll = function poll( ) {
-        var headers = {
-            'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
-            'X-RT--Poll'        : '1', // this uses polling
-            'X-RT--Receive'     : '1', // receive incoming message(s)
-            'X-RT--mID'         : self.$mID$
-        };
-        var rt_msg = null, rt_msgs = null;
+        var asUrlEncoded = 'urlencoded' === self.$cfg$.contentType, asXML = 'xml' === self.$cfg$.contentType,
+            charset = self.$cfg$.charset ? ('charset='+String(self.$cfg$.charset)) : 'charset=utf8',
+            contentType = asXML ? 'text/xml' : (asUrlEncoded ? 'application/x-www-form-urlencoded' : 'text/plain'),
+            headers = {
+                'Content-Type'      : contentType + '; ' + charset,
+                'X-RT--Poll'        : '1', // this uses polling
+                'X-RT--Receive'     : '1', // receive incoming message(s)
+                'X-RT--mID'         : self.$mID$
+            },
+            rt_msg = null, rt_msgs = null, rt_payload = null
+        ;
         if ( self.$queue$.length )
         {
             // send message(s) on same request
-            headers['X-RT--Send'] = 'x-rt--payload';
-            headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
             rt_msgs = self.$queue$.slice( );
+            if ( asXML )
+            {
+                headers['X-RT--Send'] = '1';
+                rt_payload = rt_msgs.join( '' );
+            }
+            else if ( asUrlEncoded )
+            {
+                headers['X-RT--Send'] = 'x-rt--payload';
+                headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
+                rt_payload = 'x-rt--payload=' + U.Url.encode( rt_msgs.join( rt_msg ) );
+            }
+            else
+            {
+                headers['X-RT--Send'] = '1';
+                headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
+                rt_payload = rt_msgs.join( rt_msg );
+            }
         }
         self.$xhr$ = XHR.create({
             url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
             method          : 'POST',
-            responseType    : 'text',
+            responseType    : /*asXML ? 'xml' :*/ 'text',
             //mimeType        : 'text/plain; charset=utf8',
             headers         : headers,
             onError         : function( xhr ) {
@@ -125,7 +144,7 @@ RT.Client.Poll[PROTO].listen = function( ){
                 
                 self.$timer$ = setTimeout( poll, self.$cfg$.pollInterval );
             }
-        }, rt_msgs ? ('x-rt--payload='+U.Url.encode( rt_msgs.join( rt_msg ) )) : null);
+        }, rt_payload);
     };
     self.$timer$ = setTimeout( poll, 10 );
     return self.open( );

@@ -3,7 +3,7 @@
 *  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/XPCOM/JS
 *  RT BOSH Client
 *
-*  @version: 1.0.0
+*  @version: 1.0.1
 *  https://github.com/foo123/RT
 *
 **/
@@ -58,24 +58,44 @@ RT.Client.BOSH[PROTO].abort = function( trigger ){
 RT.Client.BOSH[PROTO].send = function( payload ){
     var self = this;
     var send = function send( ) {
-        var rt_msgs = self.$queue$.slice( ),
-            rt_msg = RT.UUID('------_rt_msg_', '_------');
+        var asUrlEncoded = 'urlencoded' === self.$cfg$.contentType, asXML = 'xml' === self.$cfg$.contentType,
+            charset = self.$cfg$.charset ? ('charset='+String(self.$cfg$.charset)) : 'charset=utf8',
+            contentType = asXML ? 'text/xml' : (asUrlEncoded ? 'application/x-www-form-urlencoded' : 'text/plain'),
+            headers = {
+                'Connection'        : 'Keep-Alive',
+                'Content-Type'      : contentType + '; ' + charset,
+                'X-RT--BOSH'        : '1', // this uses BOSH
+                'X-RT--Receive'     : '1', // this is also the receive channel
+                'X-RT--mID'         : self.$mID$
+            },
+            rt_msgs = self.$queue$.slice( ), rt_msg = null, rt_payload = null
+        ;
         
+        // this is the send channel
+        if ( asXML )
+        {
+            headers['X-RT--Send'] = '1';
+            rt_payload = rt_msgs.join( '' );
+        }
+        else if ( asUrlEncoded )
+        {
+            headers['X-RT--Send'] = 'x-rt--payload';
+            headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
+            rt_payload = 'x-rt--payload=' + U.Url.encode( rt_msgs.join( rt_msg ) );
+        }
+        else
+        {
+            headers['X-RT--Send'] = '1';
+            headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
+            rt_payload = rt_msgs.join( rt_msg );
+        }
         self.$send$ = XHR.create({
             url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
             timeout         : self.$cfg$.timeout,
             method          : 'POST',
-            responseType    : 'text',
+            responseType    : /*asXML ? 'xml' :*/ 'text',
             //mimeType        : 'text/plain; charset=utf8',
-            headers         : {
-                'Connection'        : 'Keep-Alive',
-                'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
-                'X-RT--BOSH'        : '1', // this uses BOSH
-                'X-RT--Receive'     : '1', // this is also the receive channel
-                'X-RT--mID'         : self.$mID$,
-                'X-RT--Send'        : 'x-rt--payload', // this is the send channel
-                'X-RT--Message'     : rt_msg
-            },
+            headers         : headers,
             onError         : function( xhr ) {
                 self.$send$ = null;
                 if ( xhr === self.$recv$ ) self.$recv$ = null;
@@ -125,7 +145,7 @@ RT.Client.BOSH[PROTO].send = function( payload ){
                 // switch roles here if needed
                 else if ( !self.$recv$ ) setTimeout( function( ){ self.$receive$( ); }, 100 );
             }
-        }, 'x-rt--payload='+U.Url.encode( rt_msgs.join( rt_msg ) ));
+        }, rt_payload);
     };
     self.$queue$.push( String(payload) );
     // if not send in progress, send now
@@ -135,19 +155,24 @@ RT.Client.BOSH[PROTO].send = function( payload ){
 RT.Client.BOSH[PROTO].$receive$ = function( ){
     var self = this;
     if ( self.$recv$ ) return;
+    var asUrlEncoded = 'urlencoded' === self.$cfg$.contentType, asXML = 'xml' === self.$cfg$.contentType,
+        charset = self.$cfg$.charset ? ('charset='+String(self.$cfg$.charset)) : 'charset=utf8',
+        contentType = asXML ? 'text/xml' : (asUrlEncoded ? 'application/x-www-form-urlencoded' : 'text/plain'),
+        headers = {
+            'Connection'        : 'Keep-Alive',
+            'Content-Type'      : contentType + '; ' + charset,
+            'X-RT--BOSH'        : '1', // this uses BOSH
+            'X-RT--Receive'     : '1', // this is the receive channel
+            'X-RT--mID'         : self.$mID$
+        }
+    ;
     self.$recv$ = XHR.create({
         url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
         timeout         : self.$cfg$.timeout,
         method          : 'POST',
-        responseType    : 'text',
+        responseType    : /*asXML ? 'xml' :*/ 'text',
         //mimeType        : 'text/plain; charset=utf8',
-        headers         : {
-            'Connection'        : 'Keep-Alive',
-            'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
-            'X-RT--BOSH'        : '1', // this uses BOSH
-            'X-RT--Receive'     : '1', // this is the receive channel
-            'X-RT--mID'         : self.$mID$
-        },
+        headers         : headers,
         onError         : function( xhr ) {
             if ( self.$send$ )
             {
