@@ -64,9 +64,8 @@ if ( RT.Platform.XPCOM )
     //Cu['import']('resource://gre/modules/XPCOMUtils.jsm');
 
     // WebSocket implementation as XPCOM component
-    WebSocket = function( url, protocols/*, proxyHost, proxyPort, headers*/ ) {
+    WebSocket = function( url, protocols, options/*, proxyHost, proxyPort, headers*/ ) {
         var self = this;
-        protocols = 
         self._e = { };
         self.readyState = WebSocket.CONNECTING;
         self._ws = Cc["@mozilla.org/network/protocol;1?name=wss"].createInstance( Ci.nsIWebSocketChannel );
@@ -77,8 +76,8 @@ if ( RT.Platform.XPCOM )
             Ci.nsILoadInfo.SEC_ALLOW_CROSS_ORIGIN_DATA_IS_NULL,
             Ci.nsIContentPolicy.TYPE_WEBSOCKET
         );
-        if ( 'string' === typeof protocols ) protocols = [protocols];
-        if ( protocols ) self._ws.protocol = protocols.join('; ');
+        if ( 'string' === typeof protocols ) protocols = [ protocols ];
+        if ( protocols ) self._ws.protocol = protocols.join(',');
         self._ws.asyncOpen( Services.io.newURI( url, null, null ), null, 0, self, null );
     };
 
@@ -89,6 +88,10 @@ if ( RT.Platform.XPCOM )
 
     WebSocket.prototype = {
         constructor: WebSocket
+        ,CONNECTING: WebSocket.CONNECTING
+        ,OPEN: WebSocket.OPEN
+        ,CLOSING: WebSocket.CLOSING
+        ,CLOSED: WebSocket.CLOSED
         ,readyState: 0
         ,_ws: null
         ,_e: null
