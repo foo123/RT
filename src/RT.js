@@ -1,6 +1,6 @@
 /**
 *  RT
-*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/JS
+*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/XPCOM/JS
 *
 *  @version: 1.0.0
 *  https://github.com/foo123/RT
@@ -8,7 +8,9 @@
 **/
 !function( root, name, factory ) {
 "use strict";
-if ( 'object' === typeof exports )
+if ( ('undefined'!==typeof Components)&&('object'===typeof Components.classes)&&('object'===typeof Components.classesByID)&&Components.utils&&('function'===typeof Components.utils['import']) )
+    (root.EXPORTED_SYMBOLS = [ name ]) && (root[ name ] = factory( ));
+else if ( 'object' === typeof exports )
     module.exports = factory( );
 else
     (root[name] = factory( )) && ('function' === typeof define) && define.amd && define(function( ){ return root[name]; });
@@ -17,6 +19,7 @@ else
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty',
     KEYS = Object.keys, toString = Object[PROTO].toString,
+    isXPCOM = ('undefined' !== typeof Components) && ('object' === typeof Components.classes) && ('object' === typeof Components.classesByID) && Components.utils && ('function' === typeof Components.utils['import']),
     isNode = ('undefined' !== typeof global) && ('[object global]' === toString.call(global)),
     CC = String.fromCharCode,
     trim_re = /^\s+|\s+$/g,
@@ -37,7 +40,8 @@ function RT( cfg )
 RT.VERSION = '1.0.0';
 
 RT.Platform = {
-    Node: isNode
+    XPCOM   : isXPCOM,
+    Node    : isNode
 };
 
 RT.XHR = function XHR( send, abort ){
@@ -59,7 +63,7 @@ RT.XHR = function XHR( send, abort ){
         return xhr;
     };
     xhr.abort = function( ){
-        if ( aborted ) return;
+        if ( aborted ) return xhr;
         aborted = true;
         if ( abort ) abort( );
         return xhr;
@@ -84,8 +88,10 @@ RT.XHR = function XHR( send, abort ){
         xhr.responseXml = null;
         xhr._rawHeaders = null;
         xhr._headers = null;
-        //xhr.send = null;
-        //xhr.abort = null;
+        xhr.getAllResponseHeaders = null;
+        xhr.getResponseHeader = null;
+        xhr.send = null;
+        xhr.abort = null;
         return xhr;
     };
 };
@@ -94,7 +100,94 @@ RT.XHR.OPENED = 1;
 RT.XHR.HEADERS_RECEIVED = 2;
 RT.XHR.LOADING = 3;
 RT.XHR.DONE = 4;
-RT.XHR.create = isNode
+RT.XHR.create = isXPCOM
+    ? function( o, payload ) {
+        o = o || {};
+        if ( !o.url ) return null;
+        var 
+            $xhr$ = Components.classes["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance( ),
+            
+            xhr = new RT.XHR(
+            function( payload ){
+                $xhr$.send( payload );
+            },
+            function( ){
+                $xhr$.abort( );
+            }),
+            
+            update = function( xhr, $xhr$ ) {
+                xhr.readyState = $xhr$.readyState;
+                xhr.responseType = $xhr$.responseType;
+                xhr.responseURL = $xhr$.responseURL;
+                xhr.response = $xhr$.response;
+                xhr.responseText = $xhr$.responseText;
+                xhr.responseXml = $xhr$.responseXml;
+                xhr.status = $xhr$.status;
+                xhr.statusText = $xhr$.statusText;
+                return xhr;
+            }
+        ;
+        xhr.getAllResponseHeaders = function( decoded ){
+            var headers = $xhr$.getAllResponseHeaders( );
+            return true===decoded ? RT.Util.Header.decode( headers ) : headers;
+        };
+        xhr.getResponseHeader = function( key ){
+            return $xhr$.getResponseHeader( key );
+        };
+        
+        $xhr$.open( o.method||'GET', o.url, !o.sync );
+        xhr.responseType = $xhr$.responseType = o.responseType || 'text';
+        $xhr$.timeout = o.timeout || 30000; // 30 secs default timeout
+        
+        if ( o.onProgress )
+        {
+            $xhr$.addEventListener('progress', function( ) {
+                o.onProgress( update( xhr, $xhr$ ) );
+            });
+        }
+        if ( o.onLoadStart )
+        {
+            $xhr$.addEventListener('loadstart', function( ) {
+                o.onLoadStart( update( xhr, $xhr$ ) );
+            });
+        }
+        if ( !o.sync && o.onStateChange )
+        {
+            $xhr$.addEventListener('readystatechange', function( ) {
+                o.onStateChange( update( xhr, $xhr$ ) );
+            });
+        }
+        $xhr$.addEventListener('load', function( ) {
+            update( xhr, $xhr$ );
+            if ( (RT.XHR.DONE === $xhr$.readyState) )
+            {
+                if ( 200 === $xhr$.status )
+                {
+                    if ( o.onComplete ) o.onComplete( xhr );
+                }
+                else
+                {
+                    if ( o.onRequestError ) o.onRequestError( xhr );
+                    else if ( o.onError ) o.onError( xhr );
+                }
+            }
+        });
+        $xhr$.addEventListener('abort', function( ) {
+            if ( o.onAbort ) o.onAbort( update( xhr, $xhr$ ) );
+        });
+        $xhr$.addEventListener('error', function( ) {
+            if ( o.onError ) o.onError( update( xhr, $xhr$ ) );
+        });
+        $xhr$.addEventListener('timeout', function( ) {
+            if ( o.onTimeout ) o.onTimeout( update( xhr, $xhr$ ) );
+        });
+        
+        if ( o.headers ) RT.Util.Header.encode( o.headers, $xhr$ );
+        if ( o.mimeType ) $xhr$.overrideMimeType( o.mimeType );
+        if ( arguments.length > 1 ) xhr.send( payload );
+        return xhr;
+    }
+    : (isNode
     ? function( o, payload ) {
         o = o || {};
         if ( !o.url ) return null;
@@ -237,8 +330,7 @@ RT.XHR.create = isNode
         if ( o.onProgress )
         {
             $xhr$.onprogress = function( ) {
-                update( xhr, $xhr$ );
-                o.onProgress( xhr );
+                o.onProgress( update( xhr, $xhr$ ) );
             };
         }
         if ( o.onLoadStart )
@@ -288,7 +380,7 @@ RT.XHR.create = isNode
         if ( o.mimeType ) $xhr$.overrideMimeType( o.mimeType );
         if ( arguments.length > 1 ) xhr.send( payload );
         return xhr;
-    }
+    })
 ;
 
 RT.UUID = function( PREFIX, SUFFIX ) {
@@ -539,11 +631,11 @@ RT.Util = {
                     if ( '[object Array]' === toString.call(headers[key]) )
                     {
                         for(k=0,kl=headers[key].length; k<kl; k++)
-                            xmlHttpRequest.setRequestHeader(key, headers[key][k]);
+                            xmlHttpRequest.setRequestHeader(key, String(headers[key][k]));
                     }
                     else
                     {
-                        xmlHttpRequest.setRequestHeader(key, headers[key]);
+                        xmlHttpRequest.setRequestHeader(key, String(headers[key]));
                     }
                 }
                 return xmlHttpRequest;
@@ -555,7 +647,9 @@ RT.Util = {
                     key = keys[i];
                     if ( '[object Array]' === toString.call(headers[key]) )
                     {
-                        for(k=0,kl=headers[key].length; k<kl; k++)
+                        if ( header.length ) header += CRLF;
+                        header += key + ': ' + String(headers[key][0]);
+                        for(k=1,kl=headers[key].length; k<kl; k++)
                             header += CRLF + String(headers[key][k]);
                     }
                     else

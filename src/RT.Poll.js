@@ -1,6 +1,6 @@
 /**
 *  RT
-*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/JS
+*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/XPCOM/JS
 *  RT Poll Client
 *
 *  @version: 1.0.0
@@ -9,7 +9,9 @@
 **/
 !function( root, factory ) {
 "use strict";
-if ( 'object' === typeof exports )
+if ( ('undefined'!==typeof Components)&&('object'===typeof Components.classes)&&('object'===typeof Components.classesByID)&&Components.utils&&('function'===typeof Components.utils['import']) )
+    factory( root['RT'] );
+else if ( 'object' === typeof exports )
     factory( require('./RT.js') );
 else
     factory( root['RT'] ) && ('function' === typeof define) && define.amd && define(function( ){ return root['RT']; });
@@ -42,7 +44,7 @@ RT.Client.Poll[PROTO].$mID$ = null;
 RT.Client.Poll[PROTO].dispose = function( ){
     var self = this;
     if ( self.$timer$ ) { clearTimeout( self.$timer$ ); self.$timer$ = null; }
-    if ( self.$xhr$ ) { self.$xhr$.abort( ); self.$xhr$ = null; }
+    if ( self.$xhr$ ) { self.$xhr$.abort( ).dispose( ); self.$xhr$ = null; }
     self.$mID$ = null;
     self.$queue$ = null;
     return __super__.dispose.call( self );
@@ -50,7 +52,7 @@ RT.Client.Poll[PROTO].dispose = function( ){
 RT.Client.Poll[PROTO].abort = function( trigger ){
     var self = this;
     if ( self.$timer$ ) { clearTimeout( self.$timer$ ); self.$timer$ = null; }
-    if ( self.$xhr$ ) { self.$xhr$.abort( ); self.$xhr$ = null; }
+    if ( self.$xhr$ ) { self.$xhr$.abort( ).dispose( ); self.$xhr$ = null; }
     return __super__.abort.call( self, true===trigger );
 };
 RT.Client.Poll[PROTO].send = function( payload ){
@@ -72,7 +74,7 @@ RT.Client.Poll[PROTO].listen = function( ){
         {
             // send message(s) on same request
             headers['X-RT--Send'] = 'x-rt--payload';
-            headers['X-RT--Message'] = rt_msg = RT.UUID('--------_rt_msg_', '_--------');
+            headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
             rt_msgs = self.$queue$.slice( );
         }
         self.$xhr$ = XHR.create({

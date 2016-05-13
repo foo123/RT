@@ -1,6 +1,6 @@
 /**
 *  RT
-*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/JS
+*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/XPCOM/JS
 *  RT BOSH Client
 *
 *  @version: 1.0.0
@@ -9,7 +9,9 @@
 **/
 !function( root, factory ) {
 "use strict";
-if ( 'object' === typeof exports )
+if ( ('undefined'!==typeof Components)&&('object'===typeof Components.classes)&&('object'===typeof Components.classesByID)&&Components.utils&&('function'===typeof Components.utils['import']) )
+    factory( root['RT'] );
+else if ( 'object' === typeof exports )
     factory( require('./RT.js') );
 else
     factory( root['RT'] ) && ('function' === typeof define) && define.amd && define(function( ){ return root['RT']; });
@@ -41,67 +43,25 @@ RT.Client.BOSH[PROTO].$queue$ = null;
 RT.Client.BOSH[PROTO].$mID$ = null;
 RT.Client.BOSH[PROTO].dispose = function( ){
     var self = this;
-    if ( self.$recv$ ) { self.$recv$.abort( ); self.$recv$ = null; }
-    if ( self.$send$ ) { self.$send$.abort( ); self.$send$ = null; }
+    if ( self.$recv$ ) { self.$recv$.abort( ).dispose( ); self.$recv$ = null; }
+    if ( self.$send$ ) { self.$send$.abort( ).dispose( ); self.$send$ = null; }
     self.$queue$ = null;
     self.$mID$ = null;
     return __super__.dispose.call( self );
 };
 RT.Client.BOSH[PROTO].abort = function( trigger ){
     var self = this;
-    if ( self.$recv$ ) { self.$recv$.abort( ); self.$recv$ = null; }
-    if ( self.$send$ ) { self.$send$.abort( ); self.$send$ = null; }
+    if ( self.$recv$ ) { self.$recv$.abort( ).dispose( ); self.$recv$ = null; }
+    if ( self.$send$ ) { self.$send$.abort( ).dispose( ); self.$send$ = null; }
     return __super__.abort.call( self, true===trigger );
 };
 RT.Client.BOSH[PROTO].send = function( payload ){
     var self = this;
     var send = function send( ) {
         var rt_msgs = self.$queue$.slice( ),
-            rt_msg = RT.UUID('--------_rt_msg_', '_--------');
+            rt_msg = RT.UUID('------_rt_msg_', '_------');
         
         self.$send$ = XHR.create({
-            url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
-            method          : 'POST',
-            responseType    : 'text',
-            //mimeType        : 'text/plain; charset=utf8',
-            headers         : {
-                'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
-                'X-RT--BOSH'        : '1', // this uses BOSH
-                'X-RT--Send'        : 'x-rt--payload', // this is the send channel
-                'X-RT--Message'     : rt_msg
-            },
-            onError         : function( xhr ) {
-                self.$send$ = null;
-                self.emit( 'error', xhr.statusText );
-            },
-            onTimeout       : function( xhr ) {
-                self.$send$ = null;
-                // more messages pending? send new
-                if ( self.$queue$.length ) setTimeout( send, 100 );
-            },
-            onComplete      : function( xhr ) {
-                self.$send$ = null;
-                
-                if ( xhr.getResponseHeader( 'X-RT--Error' ) )
-                    return self.emit( 'error', rt_error );
-                
-                // message(s) sent
-                self.$queue$.splice( 0, rt_msgs.length );
-                
-                // more messages pending? send new
-                if ( self.$queue$.length ) setTimeout( send, 10 );
-            }
-        }, 'x-rt--payload='+U.Url.encode( rt_msgs.join( rt_msg ) ));
-    };
-    self.$queue$.push( String(payload) );
-    // if not send in progress, send now
-    if ( !self.$send$ ) setTimeout( send, 0 );
-    return self;
-};
-RT.Client.BOSH[PROTO].listen = function( ){
-    var self = this;
-    var receive = function receive( ) {
-        self.$recv$ = XHR.create({
             url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
             timeout         : self.$cfg$.timeout,
             method          : 'POST',
@@ -111,16 +71,22 @@ RT.Client.BOSH[PROTO].listen = function( ){
                 'Connection'        : 'Keep-Alive',
                 'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
                 'X-RT--BOSH'        : '1', // this uses BOSH
-                'X-RT--Receive'     : '1', // this is the receive channel
-                'X-RT--mID'         : self.$mID$
+                'X-RT--Receive'     : '1', // this is also the receive channel
+                'X-RT--mID'         : self.$mID$,
+                'X-RT--Send'        : 'x-rt--payload', // this is the send channel
+                'X-RT--Message'     : rt_msg
             },
             onError         : function( xhr ) {
-                self.$recv$ = null;
+                self.$send$ = null;
+                if ( xhr === self.$recv$ ) self.$recv$ = null;
                 self.emit( 'error', xhr.statusText );
             },
             onTimeout       : function( xhr ) {
-                self.$recv$ = null;
-                setTimeout( receive, 10 );
+                self.$send$ = null;
+                if ( xhr === self.$recv$ ) self.$recv$ = null;
+                // more messages pending? send new
+                if ( self.$queue$.length ) setTimeout( send, 100 );
+                else if ( !self.$recv$ ) setTimeout( function( ){ self.$receive$( ); }, 100 );
             },
             onComplete      : function( xhr ) {
                 var rt_msg = xhr.getResponseHeader( 'X-RT--Message' ),
@@ -128,7 +94,8 @@ RT.Client.BOSH[PROTO].listen = function( ){
                     rt_close = xhr.getResponseHeader( 'X-RT--Close' ),
                     rt_error = xhr.getResponseHeader( 'X-RT--Error' )
                 ;
-                self.$recv$ = null;
+                self.$send$ = null;
+                if ( xhr === self.$recv$ ) self.$recv$ = null;
                 
                 if ( rt_error )
                     return self.emit( 'error', rt_error );
@@ -138,6 +105,9 @@ RT.Client.BOSH[PROTO].listen = function( ){
                 
                 if ( rt_mID )
                     self.$mID$ = rt_mID;
+                
+                // message(s) sent
+                self.$queue$.splice( 0, rt_msgs.length );
                 
                 if ( rt_msg )
                 {
@@ -150,11 +120,104 @@ RT.Client.BOSH[PROTO].listen = function( ){
                     self.emit( 'receive', xhr.responseText );
                 }
                 
-                setTimeout( receive, 10 );
+                // more messages pending? send new
+                if ( self.$queue$.length ) setTimeout( send, 100 );
+                // switch roles here if needed
+                else if ( !self.$recv$ ) setTimeout( function( ){ self.$receive$( ); }, 100 );
             }
-        }, null);
+        }, 'x-rt--payload='+U.Url.encode( rt_msgs.join( rt_msg ) ));
     };
-    setTimeout( receive, 10 );
+    self.$queue$.push( String(payload) );
+    // if not send in progress, send now
+    if ( !self.$send$ ) setTimeout( send, 0 );
+    return self;
+};
+RT.Client.BOSH[PROTO].$receive$ = function( ){
+    var self = this;
+    if ( self.$recv$ ) return;
+    self.$recv$ = XHR.create({
+        url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
+        timeout         : self.$cfg$.timeout,
+        method          : 'POST',
+        responseType    : 'text',
+        //mimeType        : 'text/plain; charset=utf8',
+        headers         : {
+            'Connection'        : 'Keep-Alive',
+            'Content-Type'      : 'application/x-www-form-urlencoded; charset=utf8',
+            'X-RT--BOSH'        : '1', // this uses BOSH
+            'X-RT--Receive'     : '1', // this is the receive channel
+            'X-RT--mID'         : self.$mID$
+        },
+        onError         : function( xhr ) {
+            if ( self.$send$ )
+            {
+                // switch roles here
+                self.$recv$ = self.$send$;
+                self.$send$ = null;
+            }
+            else
+            {
+                self.$recv$ = null;
+            }
+            self.emit( 'error', xhr.statusText );
+        },
+        onTimeout       : function( xhr ) {
+            if ( self.$send$ )
+            {
+                // switch roles here
+                self.$recv$ = self.$send$;
+                self.$send$ = null;
+            }
+            else
+            {
+                self.$recv$ = null;
+            }
+            if ( !self.$recv$ ) setTimeout( function( ){ self.$receive$( ); }, 100 );
+        },
+        onComplete      : function( xhr ) {
+            var rt_msg = xhr.getResponseHeader( 'X-RT--Message' ),
+                rt_mID = xhr.getResponseHeader( 'X-RT--mID' ),
+                rt_close = xhr.getResponseHeader( 'X-RT--Close' ),
+                rt_error = xhr.getResponseHeader( 'X-RT--Error' )
+            ;
+            if ( self.$send$ )
+            {
+                // switch roles here
+                self.$recv$ = self.$send$;
+                self.$send$ = null;
+            }
+            else
+            {
+                self.$recv$ = null;
+            }
+            
+            if ( rt_error )
+                return self.emit( 'error', rt_error );
+            
+            if ( rt_close )
+                return self.close( );
+            
+            if ( rt_mID )
+                self.$mID$ = rt_mID;
+            
+            if ( rt_msg )
+            {
+                // at the same time, handle incoming message(s)
+                var received = (xhr.responseText||'').split( rt_msg ), i, l;
+                for(i=0,l=received.length; i<l; i++) self.emit( 'receive', received[i] );
+            }
+            else if ( !!xhr.responseText )
+            {
+                self.emit( 'receive', xhr.responseText );
+            }
+            
+            if ( !self.$recv$ ) setTimeout( function( ){ self.$receive$( ); }, 100 );
+        }
+    }, null);
+};
+RT.Client.BOSH[PROTO].listen = function( ){
+    var self = this;
+    setTimeout( function( ){ self.$receive$( ); }, 10 );
     return self.open( );
 
 };

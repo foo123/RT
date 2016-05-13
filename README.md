@@ -7,10 +7,13 @@ Unified Node/XPCOM/JS client-side real-time communication with underlying implem
 
 * [(XHR)](https://en.wikipedia.org/wiki/XMLHttpRequest) [Polling](https://en.wikipedia.org/wiki/Polling_%28computer_science%29)
 * [BOSH](https://en.wikipedia.org/wiki/BOSH)
-* [WebSocket](https://en.wikipedia.org/wiki/WebSocket)
+* [WebSocket](https://en.wikipedia.org/wiki/WebSocket) (native/flash/Node/XPCOM support)
 
 
 **Note** `RT` is not only a simple framework around real-time layer implementations, it is also a small protocol additional to an implementation, which enables optimum performance, e.g by multiplexing multiple requests transparently (where applicable).
+
+
+* `RT` is also a `XPCOM JavaScript Component` (Firefox) (e.g to be used in firefox browser addons/plugins)
 
 
 **Example API**

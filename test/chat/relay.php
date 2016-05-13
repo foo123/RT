@@ -36,7 +36,7 @@ if ( !empty($HEADER['X-RT--Receive']) )
     header('X-RT--mID: '.$c);
     if ( !empty($msgs) )
     {
-        $rt_msg = '--------_rt_msg_' . time( ) . '_' . mt_rand(1,1000) . '_--------';
+        $rt_msg = '------_rt_msg_' . time( ) . '_' . mt_rand(1,1000) . '_------';
         header('X-RT--Message: '.$rt_msg);
         echo implode($rt_msg, $msgs);
     }
