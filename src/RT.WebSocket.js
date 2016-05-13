@@ -19,7 +19,7 @@ else
 "use strict";
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toString,
-    __super__ = RT.Client[PROTO], U = RT.Util,
+    RT_Client = RT.Client, __super__ = RT_Client[PROTO],
     WebSocket = RT.Platform.XPCOM || RT.Platform.Node
     ? null
     : (window.WebSocket || window.MozWebSocket || window.WebkitWebSocket)
@@ -102,7 +102,6 @@ if ( RT.Platform.XPCOM )
             if ( this._e[event] )
                 this._e[event]( {event:event, data:data, target:this} );
         }
-        
         /**
         * nsIWebSocketListener method, handles the start of the websocket stream.
         *
@@ -116,7 +115,6 @@ if ( RT.Platform.XPCOM )
                 self.dispatchEvent( 'open' );
             }
         }
-
         /**
         * nsIWebSocketListener method, called when the websocket is closed locally.
         *
@@ -131,7 +129,6 @@ if ( RT.Platform.XPCOM )
                 self.dispatchEvent( Cr.NS_OK === aStatusCode || self._ws.CLOSE_NORMAL === aStatusCode ? 'close' : 'error', {status:aStatusCode} );
             }
         }
-
         /**
         * nsIWebSocketListener method, called when the websocket is closed
         * by the far end.
@@ -148,7 +145,6 @@ if ( RT.Platform.XPCOM )
                 self.dispatchEvent( 'close', {status:aCode, statusTxt:aReason} );
             }
         }
-
         /**
         * nsIWebSocketListener method, called when the websocket receives
         * a text message (normally json encoded).
@@ -163,7 +159,6 @@ if ( RT.Platform.XPCOM )
                 self.dispatchEvent( 'message', aMsg );
             }
         }
-
         /**
         * nsIWebSocketListener method, called when the websocket receives a binary message.
         * This class assumes that it is connected to a SimplePushServer and therefore treats
@@ -179,7 +174,6 @@ if ( RT.Platform.XPCOM )
                 self.dispatchEvent( 'message', aMsg );
             }
         }
-
         /**
         * Create a JSON encoded message payload and send via websocket.
         *
@@ -201,7 +195,6 @@ if ( RT.Platform.XPCOM )
             }
             return false;
         }
-
         /**
         * Close the websocket.
         */
@@ -234,24 +227,24 @@ else if ( !WebSocket )
     load_websocket_shim(function( ){ WebSocket = window.WebSocket; });
 }
 
-RT.Client.WS = function Client_WS( config ) {
+var Client_WS = RT_Client.WS = function Client_WS( config ) {
     var self = this;
     if ( !(self instanceof Client_WS) ) return new Client_WS(config);
     __super__.constructor.call( self, config );
     self.$ws$ = null;
 };
-RT.Client.Impl['ws'] = RT.Client.Impl['websocket'] = RT.Client.Impl['web-socket'] = RT.Client.WS;
+RT_Client.Impl['ws'] = RT_Client.Impl['websocket'] = RT_Client.Impl['web-socket'] = Client_WS;
 
 /* extends RT.Client class */
-RT.Client.WS[PROTO] = Object.create( __super__ );
-RT.Client.WS[PROTO].constructor = RT.Client.WS;
-RT.Client.WS[PROTO].$ws$ = null;
-RT.Client.WS[PROTO].dispose = function( ){
+Client_WS[PROTO] = Object.create( __super__ );
+Client_WS[PROTO].constructor = Client_WS;
+Client_WS[PROTO].$ws$ = null;
+Client_WS[PROTO].dispose = function( ){
     var self = this;
     self.$ws$ = null;
     return __super__.dispose.call( self );
 };
-RT.Client.WS[PROTO].abort = function( ){
+Client_WS[PROTO].abort = function( ){
     var self = this, ws = self.$ws$;
     if ( ws && (WebSocket.OPEN === ws.readyState) )
     {
@@ -261,18 +254,18 @@ RT.Client.WS[PROTO].abort = function( ){
     self.$ws$ = null;
     return self;
 };
-RT.Client.WS[PROTO].close = function( e ){
+Client_WS[PROTO].close = function( e ){
     var self = this, ws = self.$ws$;
     if ( ws && (WebSocket.OPEN === ws.readyState) ) ws.close( );
     __super__.close.call( self, e );
     return self;
 };
-RT.Client.WS[PROTO].send = function( payload ){
+Client_WS[PROTO].send = function( payload ){
     var self = this, ws = self.$ws$;
     if ( ws && (WebSocket.OPEN === ws.readyState) ) ws.send( String(payload) );
     return self;
 };
-RT.Client.WS[PROTO].listen = function( ){
+Client_WS[PROTO].listen = function( ){
     var self = this, ws;
     if ( !WebSocket && !RT.Platform.XPCOM && !RT.Platform.Node )
     {

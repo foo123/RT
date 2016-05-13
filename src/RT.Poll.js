@@ -19,10 +19,10 @@ else
 "use strict";
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toString,
-    __super__ = RT.Client[PROTO], U = RT.Util, XHR = RT.XHR
+    RT_Client = RT.Client, __super__ = RT_Client[PROTO], U = RT.Util, RT_XHR = RT.XHR
 ;
 
-RT.Client.Poll = function Client_Poll( cfg ) {
+var Client_Poll = RT_Client.Poll = function Client_Poll( cfg ) {
     var self = this;
     if ( !(self instanceof Client_Poll) ) return new Client_Poll(cfg);
     __super__.constructor.call( self, cfg );
@@ -32,16 +32,16 @@ RT.Client.Poll = function Client_Poll( cfg ) {
     self.$mID$ = 0;
     self.$queue$ = [];
 };
-RT.Client.Impl['poll'] = RT.Client.Impl['short-poll'] = RT.Client.Poll;
+RT_Client.Impl['poll'] = RT_Client.Impl['short-poll'] = Client_Poll;
 
 /* extends RT.Client class */
-RT.Client.Poll[PROTO] = Object.create( __super__ );
-RT.Client.Poll[PROTO].constructor = RT.Client.Poll;
-RT.Client.Poll[PROTO].$timer$ = null;
-RT.Client.Poll[PROTO].$xhr$ = null;
-RT.Client.Poll[PROTO].$queue$ = null;
-RT.Client.Poll[PROTO].$mID$ = null;
-RT.Client.Poll[PROTO].dispose = function( ){
+Client_Poll[PROTO] = Object.create( __super__ );
+Client_Poll[PROTO].constructor = Client_Poll;
+Client_Poll[PROTO].$timer$ = null;
+Client_Poll[PROTO].$xhr$ = null;
+Client_Poll[PROTO].$queue$ = null;
+Client_Poll[PROTO].$mID$ = null;
+Client_Poll[PROTO].dispose = function( ){
     var self = this;
     if ( self.$timer$ ) { clearTimeout( self.$timer$ ); self.$timer$ = null; }
     if ( self.$xhr$ ) { self.$xhr$.abort( ).dispose( ); self.$xhr$ = null; }
@@ -49,18 +49,18 @@ RT.Client.Poll[PROTO].dispose = function( ){
     self.$queue$ = null;
     return __super__.dispose.call( self );
 };
-RT.Client.Poll[PROTO].abort = function( trigger ){
+Client_Poll[PROTO].abort = function( trigger ){
     var self = this;
     if ( self.$timer$ ) { clearTimeout( self.$timer$ ); self.$timer$ = null; }
     if ( self.$xhr$ ) { self.$xhr$.abort( ).dispose( ); self.$xhr$ = null; }
     return __super__.abort.call( self, true===trigger );
 };
-RT.Client.Poll[PROTO].send = function( payload ){
+Client_Poll[PROTO].send = function( payload ){
     var self = this;
     self.$queue$.push( String(payload) );
     return self;
 };
-RT.Client.Poll[PROTO].listen = function( ){
+Client_Poll[PROTO].listen = function( ){
     var self = this;
     var poll = function poll( ) {
         var asUrlEncoded = 'urlencoded' === self.$cfg$.contentType, asXML = 'xml' === self.$cfg$.contentType,
@@ -96,7 +96,7 @@ RT.Client.Poll[PROTO].listen = function( ){
                 rt_payload = rt_msgs.join( rt_msg );
             }
         }
-        self.$xhr$ = XHR.create({
+        self.$xhr$ = RT_XHR.create({
             url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
             method          : 'POST',
             responseType    : /*asXML ? 'xml' :*/ 'text',

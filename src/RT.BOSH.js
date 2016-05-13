@@ -19,10 +19,10 @@ else
 "use strict";
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toString,
-    __super__ = RT.Client[PROTO], U = RT.Util, XHR = RT.XHR
+    RT_Client = RT.Client, __super__ = RT_Client[PROTO], U = RT.Util, RT_XHR = RT.XHR
 ;
 
-RT.Client.BOSH = function Client_Bosh( cfg ) {
+var Client_Bosh = RT_Client.BOSH = function Client_Bosh( cfg ) {
     var self = this;
     if ( !(self instanceof Client_Bosh) ) return new Client_Bosh(cfg);
     __super__.constructor.call( self, cfg );
@@ -32,16 +32,16 @@ RT.Client.BOSH = function Client_Bosh( cfg ) {
     self.$queue$ = [];
     self.$mID$ = 0;
 };
-RT.Client.Impl['bosh'] = RT.Client.Impl['long-poll'] = RT.Client.BOSH;
+RT_Client.Impl['bosh'] = RT_Client.Impl['long-poll'] = Client_Bosh;
 
 /* extends RT.Client class */
-RT.Client.BOSH[PROTO] = Object.create( __super__ );
-RT.Client.BOSH[PROTO].constructor = RT.Client.BOSH;
-RT.Client.BOSH[PROTO].$send$ = null;
-RT.Client.BOSH[PROTO].$recv$ = null;
-RT.Client.BOSH[PROTO].$queue$ = null;
-RT.Client.BOSH[PROTO].$mID$ = null;
-RT.Client.BOSH[PROTO].dispose = function( ){
+Client_Bosh[PROTO] = Object.create( __super__ );
+Client_Bosh[PROTO].constructor = Client_Bosh;
+Client_Bosh[PROTO].$send$ = null;
+Client_Bosh[PROTO].$recv$ = null;
+Client_Bosh[PROTO].$queue$ = null;
+Client_Bosh[PROTO].$mID$ = null;
+Client_Bosh[PROTO].dispose = function( ){
     var self = this;
     if ( self.$recv$ ) { self.$recv$.abort( ).dispose( ); self.$recv$ = null; }
     if ( self.$send$ ) { self.$send$.abort( ).dispose( ); self.$send$ = null; }
@@ -49,13 +49,13 @@ RT.Client.BOSH[PROTO].dispose = function( ){
     self.$mID$ = null;
     return __super__.dispose.call( self );
 };
-RT.Client.BOSH[PROTO].abort = function( trigger ){
+Client_Bosh[PROTO].abort = function( trigger ){
     var self = this;
     if ( self.$recv$ ) { self.$recv$.abort( ).dispose( ); self.$recv$ = null; }
     if ( self.$send$ ) { self.$send$.abort( ).dispose( ); self.$send$ = null; }
     return __super__.abort.call( self, true===trigger );
 };
-RT.Client.BOSH[PROTO].send = function( payload ){
+Client_Bosh[PROTO].send = function( payload ){
     var self = this;
     var send = function send( ) {
         var asUrlEncoded = 'urlencoded' === self.$cfg$.contentType, asXML = 'xml' === self.$cfg$.contentType,
@@ -89,7 +89,7 @@ RT.Client.BOSH[PROTO].send = function( payload ){
             headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
             rt_payload = rt_msgs.join( rt_msg );
         }
-        self.$send$ = XHR.create({
+        self.$send$ = RT_XHR.create({
             url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
             timeout         : self.$cfg$.timeout,
             method          : 'POST',
@@ -152,7 +152,7 @@ RT.Client.BOSH[PROTO].send = function( payload ){
     if ( !self.$send$ ) setTimeout( send, 0 );
     return self;
 };
-RT.Client.BOSH[PROTO].$receive$ = function( ){
+Client_Bosh[PROTO].$receive$ = function( ){
     var self = this;
     if ( self.$recv$ ) return;
     var asUrlEncoded = 'urlencoded' === self.$cfg$.contentType, asXML = 'xml' === self.$cfg$.contentType,
@@ -166,7 +166,7 @@ RT.Client.BOSH[PROTO].$receive$ = function( ){
             'X-RT--mID'         : self.$mID$
         }
     ;
-    self.$recv$ = XHR.create({
+    self.$recv$ = RT_XHR.create({
         url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__='+(new Date().getTime()),
         timeout         : self.$cfg$.timeout,
         method          : 'POST',
@@ -240,7 +240,7 @@ RT.Client.BOSH[PROTO].$receive$ = function( ){
         }
     }, null);
 };
-RT.Client.BOSH[PROTO].listen = function( ){
+Client_Bosh[PROTO].listen = function( ){
     var self = this;
     setTimeout( function( ){ self.$receive$( ); }, 10 );
     return self.open( );
