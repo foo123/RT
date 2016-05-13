@@ -1,6 +1,6 @@
 /**
 *  RT
-*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/XPCOM/JS
+*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets / webrtc for Node/XPCOM/JS
 *
 *  @version: 1.0.1
 *  https://github.com/foo123/RT
@@ -9,19 +9,21 @@
 !function( root, name, factory ) {
 "use strict";
 if ( ('undefined'!==typeof Components)&&('object'===typeof Components.classes)&&('object'===typeof Components.classesByID)&&Components.utils&&('function'===typeof Components.utils['import']) )
-    (root.EXPORTED_SYMBOLS = [ name ]) && (root[ name ] = factory( ));
+    (root.EXPORTED_SYMBOLS = [ name ]) && (root[ name ] = factory( root ));
 else if ( 'object' === typeof exports )
-    module.exports = factory( );
+    module.exports = factory( root );
 else
-    (root[name] = factory( )) && ('function' === typeof define) && define.amd && define(function( ){ return root[name]; });
-}(this, 'RT', function( ) {
+    (root[name] = factory( root )) && ('function' === typeof define) && define.amd && define(function( ){ return root[name]; });
+}(this, 'RT', function( root ) {
 "use strict";
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty',
     KEYS = Object.keys, toString = Object[PROTO].toString,
     isXPCOM = ('undefined' !== typeof Components) && ('object' === typeof Components.classes) && ('object' === typeof Components.classesByID) && Components.utils && ('function' === typeof Components.utils['import']),
     isNode = ('undefined' !== typeof global) && ('[object global]' === toString.call(global)),
-    CC = String.fromCharCode,
+    isWebWorker = !isXPCOM && !isNode && ('undefined' !== typeof WorkerGlobalScope) && ('function' === typeof importScripts) && (navigator instanceof WorkerNavigator),
+    isBrowser = !isXPCOM && !isNode && !isWebWorker && ('undefined' !== typeof navigator),
+    XHR, Util, CC = String.fromCharCode,
     trim_re = /^\s+|\s+$/g,
     trim = String[PROTO].trim 
         ? function( s ) { return s.trim( ); }
@@ -40,11 +42,13 @@ function RT( cfg )
 RT.VERSION = '1.0.1';
 
 RT.Platform = {
-    XPCOM   : isXPCOM,
-    Node    : isNode
+    XPCOM       : isXPCOM,
+    Node        : isNode,
+    WebWorker   : isWebWorker,
+    Browser     : isBrowser
 };
 
-RT.XHR = function XHR( send, abort ){
+XHR = RT.XHR = function XHR( send, abort ){
     var xhr = this, aborted = false;
     xhr.readyState = XHR.UNSENT;
     xhr.status = null;
@@ -96,19 +100,21 @@ RT.XHR = function XHR( send, abort ){
         return xhr;
     };
 };
-RT.XHR.UNSENT = 0;
-RT.XHR.OPENED = 1;
-RT.XHR.HEADERS_RECEIVED = 2;
-RT.XHR.LOADING = 3;
-RT.XHR.DONE = 4;
-RT.XHR.create = isXPCOM
+
+XHR.UNSENT = 0;
+XHR.OPENED = 1;
+XHR.HEADERS_RECEIVED = 2;
+XHR.LOADING = 3;
+XHR.DONE = 4;
+
+XHR.create = isXPCOM
     ? function( o, payload ) {
         o = o || {};
         if ( !o.url ) return null;
         var 
             $xhr$ = Components.classes["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance( ),
             
-            xhr = new RT.XHR(
+            xhr = new XHR(
             function( payload ){
                 $xhr$.send( payload );
             },
@@ -130,7 +136,7 @@ RT.XHR.create = isXPCOM
         ;
         xhr.getAllResponseHeaders = function( decoded ){
             var headers = $xhr$.getAllResponseHeaders( );
-            return true===decoded ? RT.Util.Header.decode( headers ) : headers;
+            return true===decoded ? Util.Header.decode( headers ) : headers;
         };
         xhr.getResponseHeader = function( key ){
             return $xhr$.getResponseHeader( key );
@@ -183,7 +189,7 @@ RT.XHR.create = isXPCOM
             if ( o.onTimeout ) o.onTimeout( update( xhr, $xhr$ ) );
         });
         
-        if ( o.headers ) RT.Util.Header.encode( o.headers, $xhr$ );
+        if ( o.headers ) Util.Header.encode( o.headers, $xhr$ );
         if ( o.mimeType ) $xhr$.overrideMimeType( o.mimeType );
         if ( arguments.length > 1 ) xhr.send( payload );
         return xhr;
@@ -205,7 +211,7 @@ RT.XHR.create = isXPCOM
             }
         ;
         
-        xhr = new RT.XHR(
+        xhr = new XHR(
         function( payload ) {
             if ( null != payload )
             {
@@ -289,7 +295,7 @@ RT.XHR.create = isXPCOM
             if ( o.onError ) o.onError( xhr );
         });
         
-        if ( o.headers ) RT.Util.Header.encode( o.headers, null, $hr$ );
+        if ( o.headers ) Util.Header.encode( o.headers, null, $hr$ );
         //if ( o.mimeType ) $hr$.overrideMimeType( o.mimeType );
         if ( arguments.length > 1 ) xhr.send( payload );
         return xhr;
@@ -297,11 +303,11 @@ RT.XHR.create = isXPCOM
     : function( o, payload ) {
         o = o || {};
         if ( !o.url ) return null;
-        var $xhr$ = window.XMLHttpRequest
+        var $xhr$ = 'undefined' !== typeof XMLHttpRequest
             ? new XMLHttpRequest( )
             : new ActiveXObject( 'Microsoft.XMLHTTP' ) /* or ActiveXObject( 'Msxml2.XMLHTTP' ); ??*/,
             
-            xhr = new RT.XHR(
+            xhr = new XHR(
             function( payload ){
                 $xhr$.send( payload );
             },
@@ -323,7 +329,7 @@ RT.XHR.create = isXPCOM
         ;
         xhr.getAllResponseHeaders = function( decoded ){
             var headers = $xhr$.getAllResponseHeaders( );
-            return true===decoded ? RT.Util.Header.decode( headers ) : headers;
+            return true===decoded ? Util.Header.decode( headers ) : headers;
         };
         xhr.getResponseHeader = function( key ){
             return $xhr$.getResponseHeader( key );
@@ -382,7 +388,7 @@ RT.XHR.create = isXPCOM
             if ( o.onTimeout ) o.onTimeout( update( xhr, $xhr$ ) );
         };
         
-        if ( o.headers ) RT.Util.Header.encode( o.headers, $xhr$ );
+        if ( o.headers ) Util.Header.encode( o.headers, $xhr$ );
         if ( o.mimeType ) $xhr$.overrideMimeType( o.mimeType );
         if ( arguments.length > 1 ) xhr.send( payload );
         return xhr;
@@ -400,7 +406,7 @@ RT.Const = {
     COOKIE_RE: /([^=]+)(?:=(.*))?/
 };
 
-RT.Util = {
+Util = RT.Util = {
     String: {
       trim: trim  
     },
@@ -453,7 +459,7 @@ RT.Util = {
     // adapted from jquery.base64
     Base64: {
         encode: function( input ) {
-            input = RT.Util.Utf8.encode( input );
+            input = Util.Utf8.encode( input );
             var output = '', chr1, chr2, chr3,
                 enc1, enc2, enc3, enc4, i = 0, l = input.length,
                 keyString = RT.Const.BASE64;
@@ -500,7 +506,7 @@ RT.Util = {
                     output += CC(chr3);
                 }
             }
-            output = RT.Util.Utf8.decode( output );
+            output = Util.Utf8.decode( output );
             return output;
         }
     },
@@ -514,7 +520,7 @@ RT.Util = {
         create: function( o ) {
             if ( !o ) return '';
             var urlString = [], queue, keys = KEYS(o), key, val, k, kl = keys.length, entry, i, l, kk,
-                encode = RT.Util.Url.encode, to_string;
+                encode = Util.Url.encode, to_string;
             k = 0; queue = k < kl ? [ [key=keys[k++], o[key]] ] : [];
             while( queue.length )
             {
@@ -555,10 +561,10 @@ RT.Util = {
             return decodeURIComponent( ''+s );
         },
         encode: function( s ) {
-            return RT.Util.Url.rawencode( s ).split('%20').join('+');
+            return Util.Url.rawencode( s ).split('%20').join('+');
         },
         decode: function( s ) { 
-            return RT.Util.Url.rawdecode( ('' + s).split('+').join('%20') ); 
+            return Util.Url.rawdecode( ('' + s).split('+').join('%20') ); 
         }
     },
     
@@ -586,7 +592,7 @@ RT.Util = {
             return cookieString;
         },
         decode: function( cookieString ) {
-            var cookie = RT.Util.Cookie.create( ),
+            var cookie = Util.Cookie.create( ),
                 /*  parse value/name  */
                 equalsSplit = RT.Const.COOKIE_RE,
                 cookieParams = String(cookieString).split('; '),

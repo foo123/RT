@@ -1,6 +1,6 @@
 /**
 *  RT
-*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets for Node/XPCOM/JS
+*  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets / webrtc for Node/XPCOM/JS
 *  RT Poll Client
 *
 *  @version: 1.0.1
@@ -10,12 +10,12 @@
 !function( root, factory ) {
 "use strict";
 if ( ('undefined'!==typeof Components)&&('object'===typeof Components.classes)&&('object'===typeof Components.classesByID)&&Components.utils&&('function'===typeof Components.utils['import']) )
-    factory( root['RT'] );
+    factory( root, root['RT'] );
 else if ( 'object' === typeof exports )
-    factory( require('./RT.js') );
+    factory( root, require('./RT.js') );
 else
-    factory( root['RT'] ) && ('function' === typeof define) && define.amd && define(function( ){ return root['RT']; });
-}(this, function( RT ) {
+    factory( root, root['RT'] ) && ('function' === typeof define) && define.amd && define(function( ){ return root['RT']; });
+}(this, function( root, RT ) {
 "use strict";
 
 var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toString,
