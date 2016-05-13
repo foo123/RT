@@ -72,9 +72,10 @@ RT.XHR = function XHR( send, abort ){
         if ( XHR.DONE !== xhr.readyState ) return null;
         return true===decoded ? xhr._headers : xhr._rawHeaders;
     };
-    xhr.getResponseHeader = function( key ) {
+    xhr.getResponseHeader = function( key, lowercased ) {
         if ( (null == key) || (XHR.DONE !== xhr.readyState) ) return null;
         var headers = xhr._headers || {};
+        if ( false !== lowercased ) key = key.toLowerCase( );
         return headers[HAS](key) ? headers[key] : null;
     };
     xhr.dispose = function( ) {
@@ -209,9 +210,14 @@ RT.XHR.create = isXPCOM
             if ( null != payload )
             {
                 payload = String( payload );
-                $hr$.setHeader( 'Content-Length', payload.length.toString() );
+                $hr$.setHeader( 'Content-Length', String(payload.length) );
                 $hr$.write( payload );
             }
+            /*else
+            {
+                $hr$.setHeader( 'Content-Length', '0' );
+                $hr$.write( '' );
+            }*/
             $hr$.end( );
         },
         function( ) {
