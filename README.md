@@ -32,7 +32,10 @@ Unified Node/XPCOM/JS client-side real-time communication with underlying implem
 
 
 
-**Note** `RT` is not only a simple framework around real-time layer implementations, it is also a small protocol additional to an implementation, which enables optimum performance, e.g by multiplexing multiple requests transparently (where applicable).
+**Note1** `RT` is not only a simple framework around real-time layer implementations, it is also a small protocol additional to an implementation, which enables optimum performance, e.g by multiplexing multiple requests transparently (where applicable).
+
+
+**Note2** some BOSH implementations (especialy javascript implementations) are actually **XMPP-BOSH** implementations (meaning they implement XMPP **over** BOSH, i.e using BOSH technique and protocol for XMPP). This is **just** the BOSH, **without the XMPP part** (which of course can be implemented **using** the BOSH method of `RT` or other method e.g websocket, but still it is an **autonomous technique in itself**)
 
 
 * `RT` is also a `XPCOM JavaScript Component` (Firefox) (e.g to be used in firefox browser addons/plugins)
