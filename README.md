@@ -111,3 +111,7 @@ function send( event )
 
 [Etymology of *"hour"* (as in *"time"*, *"ώρα"*)](https://en.wiktionary.org/wiki/hour) compare to [Horus](https://en.wikipedia.org/wiki/Horus), [Helios](https://en.wikipedia.org/wiki/Helios)
 compare to [*"ωραίο"*, oraío, (original: "timely","in time", metaphor for "beatiful")](https://en.wiktionary.org/wiki/%CF%89%CF%81%CE%B1%CE%AF%CE%BF%CF%82#Greek)
+
+
+
+Really beatiful, isnt it? :))
