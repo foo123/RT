@@ -4,7 +4,7 @@
 
 
 [Etymology of *"real"*](https://en.wiktionary.org/wiki/real)
- compare to [names/symbols of the sun](http://www.behindthename.com/names/meaning/sun)
+ compare to [names/symbols of the sun](http://www.behindthename.com/names/meaning/sun) (e.g [Ra](https://en.wikipedia.org/wiki/Ra), [Surya](https://en.wikipedia.org/wiki/Surya), [Sol](https://en.wikipedia.org/wiki/Sol_%28mythology%29), [Helios](https://en.wikipedia.org/wiki/Helios))
  compare to [rajah](https://en.wiktionary.org/wiki/rajah#English), [regal](https://en.wiktionary.org/wiki/regal), [royal](https://en.wiktionary.org/wiki/royal), [rex](https://en.wiktionary.org/wiki/rex#Latin), [tyrannus](https://en.wiktionary.org/wiki/%CF%84%CF%8D%CF%81%CE%B1%CE%BD%CE%BD%CE%BF%CF%82#Ancient_Greek) (e.g *"Oedipus Tyrannus"*, i.e *"Oedipus Rex"*)
 
 
