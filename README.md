@@ -3,6 +3,10 @@
 ![RT](/rt.jpg)
 
 
+[Etymology of *"real"*](https://en.wiktionary.org/wiki/real)
+ compare to [names/symbols of the sun](http://www.behindthename.com/names/meaning/sun)
+
+
 Unified Node/XPCOM/JS client-side real-time communication with underlying implementations for:
 
 * [(XHR)](https://en.wikipedia.org/wiki/XMLHttpRequest) [Polling](https://en.wikipedia.org/wiki/Polling_%28computer_science%29)
