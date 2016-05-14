@@ -5,6 +5,7 @@
 
 [Etymology of *"real"*](https://en.wiktionary.org/wiki/real)
  compare to [names/symbols of the sun](http://www.behindthename.com/names/meaning/sun)
+ compare to [rajah](https://en.wiktionary.org/wiki/rajah#English), [regal](https://en.wiktionary.org/wiki/regal), [royal](https://en.wiktionary.org/wiki/royal), [rex](https://en.wiktionary.org/wiki/rex#Latin)
 
 
 Unified Node/XPCOM/JS client-side real-time communication with underlying implementations for:
