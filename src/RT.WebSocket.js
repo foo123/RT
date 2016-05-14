@@ -24,7 +24,7 @@ var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toStri
 
 function load( path, ws_impl, cb )
 {
-    var scripts = document.getElementsByTagName('scripts'),
+    var scripts = document.getElementsByTagName('script'),
         this_script = scripts[scripts.length-1],
         base = this_script.src.split('/').slice(0,-1).join('/'),
         script_swf, script_ws,
