@@ -5,7 +5,7 @@
 
 [Etymology of *"real"*](https://en.wiktionary.org/wiki/real)
  compare to [names/symbols of the sun](http://www.behindthename.com/names/meaning/sun)
- compare to [rajah](https://en.wiktionary.org/wiki/rajah#English), [regal](https://en.wiktionary.org/wiki/regal), [royal](https://en.wiktionary.org/wiki/royal), [rex](https://en.wiktionary.org/wiki/rex#Latin)
+ compare to [rajah](https://en.wiktionary.org/wiki/rajah#English), [regal](https://en.wiktionary.org/wiki/regal), [royal](https://en.wiktionary.org/wiki/royal), [rex](https://en.wiktionary.org/wiki/rex#Latin), [tyrannus](https://en.wiktionary.org/wiki/%CF%84%CF%8D%CF%81%CE%B1%CE%BD%CE%BD%CE%BF%CF%82#Ancient_Greek) (e.g *"Oedipus Tyrannus"*, i.e *"Oedipus Rex"*)
 
 
 Unified Node/XPCOM/JS client-side real-time communication with underlying implementations for:
