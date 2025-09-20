@@ -1,7 +1,6 @@
 "use strict";
 
-var
-    clients = [],
+var clients = [],
     // websocket server
     WebSocket = require('ws'),
     wss = new WebSocket.Server({
@@ -9,20 +8,20 @@ var
     })
 ;
 
-wss.on('connection', function( ws ) {
+wss.on('connection', function(ws) {
     console.log('client connection');
-    clients.push( ws );
-    
-    ws.on('close', function(){
+    clients.push(ws);
+
+    ws.on('close', function() {
         console.log('client connection closed');
-        clients.splice( clients.indexOf(ws), 1 );
+        clients.splice(clients.indexOf(ws), 1);
     });
-    
-    ws.on('message', function( message ) {
-        for(var i=0,l=clients.length; i<l; i++)
+
+    ws.on('message', function(message) {
+        for (var i=0,l=clients.length; i<l; ++i)
         {
             var client = clients[i];
-            if ( (WebSocket.OPEN === client.readyState) ) client.send( message );
+            if (WebSocket.OPEN === client.readyState) client.send(message);
         }
     });
 });
