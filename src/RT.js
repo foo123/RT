@@ -619,7 +619,7 @@ Util = RT.Util = {
         encode: function(headers, xmlHttpRequest, httpRequestResponse) {
             var header = '';
             if (!headers) return header;
-            var keys = KEYS(headers), key, i, l, k, kl, CRLF = RT.Const.CRLF;
+            var keys = KEYS(headers), key, i, l, k, kl, CRLF = "\r\n";
             if (httpRequestResponse)
             {
                 for (i=0,l=keys.length; i<l; ++i)
@@ -669,18 +669,18 @@ Util = RT.Util = {
             }
         },
         decode: function(headers, lowercase) {
-            var header = {}, key = null, parts, i, l, line, CRLF = RT.Const.CRLF;
+            var header = {}, key = null, parts, i, l, line;
             if (headers)
             {
                 lowercase = true === lowercase;
-                headers = headers.split(RT.Const.CRLF_RE);
+                headers = headers.split(/[\r\n]+/g);
                 for (i=0,l=headers.length; i<l; ++i)
                 {
                     line = headers[i];
                     parts = line.split(':', 2);
                     if (parts.length > 1)
                     {
-                        key = trim(parts.shift());
+                        key = trim(parts[0]);
                         if (lowercase) key = key.toLowerCase();
                         if (HAS.call(header, key))
                         {
@@ -694,7 +694,7 @@ Util = RT.Util = {
                     }
                     else if (parts[0].length && key)
                     {
-                        header[key] = CRLF + parts[0];
+                        header[key] = "\r\n" + parts[0];
                     }
                 }
             }

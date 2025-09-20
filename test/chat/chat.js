@@ -80,11 +80,11 @@ console.log('---------------------------------');
 
 var rt_chat = RT({
         use: rt_impl,
-        endpoint: 'ws' === rt_impl ? 'ws://127.0.0.1:1111' : ('bosh' === rt_impl ? 'http://_mygit/RT/test/chat/relay.php?bosh=1' : 'http://_mygit/RT/test/chat/relay.php?poll=1')
+        endpoint: 'ws' === rt_impl ? 'ws://127.0.0.1:1111' : ('bosh' === rt_impl ? 'http://localhost:2222/test/chat/relay.php?bosh=1' : 'http://localhost:2222/test/chat/relay.php?poll=1')
     })
     .on('receive', function(evt) {
         if (!evt.data) return;
-        var m = RT.Util.Json.decode(evt.data);
+        var m = JSON.parse(evt.data);
         console.log('user    : ' + m.user);
         console.log('message : ' + m.message);
     })
@@ -95,7 +95,7 @@ var rt_chat = RT({
         console.log('CLOSED!');
     })
     .on('error', function(evt) {
-        console.log('ERROR: '+evt.data);
+        console.log('ERROR: ' + evt.data);
     })
     .init()
 ;
@@ -104,7 +104,7 @@ function send(msg)
 {
     if (RT.Client.OPENED !== rt_chat.status) return;
     if (!msg.length) return;
-    rt_chat.send(RT.Util.Json.encode({
+    rt_chat.send(JSON.stringify({
         'user': user,
         'message': msg
     }));
