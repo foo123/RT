@@ -105,10 +105,10 @@ function textify(text)
     return emotify(linkify(newlinefy(htmlify(text))));
 }
 
-var user = document.location.href.match(/[?&]user=([^&=]+)/)[1] || 'user';
+var user = (document.location.href.match(/[?&]user=([^&=]+)/) || ['', 'user'])[1];
 var output = document.getElementById('output'), input = document.getElementById('input');
 
-var rt_impl = (document.location.href.match(/[?&]use=([^&=]+)/)[1] || 'poll').toLowerCase();
+var rt_impl = (document.location.href.match(/[?&]use=([^&=]+)/) || ['', 'poll'])[1].toLowerCase();
 if ('poll' !== rt_impl && 'bosh' !== rt_impl && 'ws' !== rt_impl) rt_impl = 'poll';
 
 document.getElementById('rt_impl').innerHTML = 'ws' === rt_impl ? 'WebSocket' : ('bosh' === rt_impl ? 'BOSH' : 'Poll');
@@ -119,7 +119,7 @@ var rt_chat = RT({
     })
     .on('receive', function(evt) {
         if (!evt.data) return;
-        var m = RT.Util.Json.decode(evt.data);
+        var m = JSON.parse(String(evt.data));
         output.innerHTML += '<div class="entry'+(m.user === user ? ' own' : '') + '">\
         <span class="user">' + userify(m.user) + '</span>\
         <span class="message">' + textify(m.message) + '</span>\
@@ -141,10 +141,10 @@ function send(event)
 {
     if (RT.Client.OPENED !== rt_chat.status) return;
     if (event && (!key_is(event, 13) || event.shiftKey)) return;
-    var msg = RT.Util.String.trim(input.value || '');
+    var msg = (input.value || '').trim();
     input.value = '';
     if (!msg.length) return;
-    rt_chat.send(RT.Util.Json.encode({
+    rt_chat.send(JSON.stringify({
         'user': user,
         'message': msg
     }));

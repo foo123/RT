@@ -1,4 +1,5 @@
 <?php
+// run php -S localhost:2222
 $is_bosh = !empty($_GET['bosh']);
 
 session_id($is_bosh ? 'rt-chat-test-bosh' : 'rt-chat-test');
@@ -24,7 +25,7 @@ if (!empty($HEADER['x-rt--send']))
         // in post data
         $data = $_POST[$sent];
     }
-    if (null !== $data)
+    if (isset($data))
     {
         if (!empty($HEADER['x-rt--message'])) $msgs = explode($HEADER['x-rt--message'], $data);
         else $msgs = (array)$data;
@@ -40,10 +41,10 @@ if (!empty($HEADER['x-rt--receive']))
         header('X-RT--mID: ' . count($_SESSION['channel'][$channel]));
         exit;
     }
-    
+
     // long poll is here
     // if ( $is_bosh ) while ( $rt_id >= count($_SESSION['channel'][$channel]) ) sleep( 1 );
-    
+
     $msgs = array();
     $c = count($_SESSION['channel'][$channel]);
     for ($i=$rt_id; $i<$c; ++$i) $msgs[] = $_SESSION['channel'][$channel][$i];

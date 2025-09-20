@@ -3,7 +3,7 @@
 *  unified client-side real-time communication using (xhr) polling / bosh / (web)sockets / webrtc for Node/XPCOM/JS
 *  RT WebRTC Client
 *
-*  @version: 1.0.2
+*  @version: 1.1.0
 *  https://github.com/foo123/RT
 *
 **/
