@@ -4,20 +4,21 @@
 
 ![RT](/rt.jpg)
 
+**version: 1.1.0**
 
 **supports**:
 
 * [Polling](https://en.wikipedia.org/wiki/Polling_%28computer_science%29)
 * [BOSH](https://en.wikipedia.org/wiki/BOSH)
-* [WebSocket](https://en.wikipedia.org/wiki/WebSocket) (Browser/Node/XPCOM/Flash platforms)
+* [WebSocket](https://en.wikipedia.org/wiki/WebSocket) (Browser/Node/XPCOM/Flash)
 * [WebRTC](https://en.wikipedia.org/wiki/WebRTC) (TODO)
 
 
 
-`RT` is not only a simple framework around real-time layer implementations, it is also a small protocol additional to an implementation, which enables optimum performance, e.g by multiplexing multiple requests transparently (where applicable).
+`RT` is not only a simple framework around real-time layer implementations, it is also a small protocol additional to an implementation, which enables optimum performance, e.g by multiplexing multiple requests transparently where applicable (eg `Poll` and `BOSH`, see `chat/relay.php` for an example).
 
 
-**NB**: Some `BOSH` implementations are actually `XMPP-BOSH` implementations, meaning they implement *XMPP over BOSH* i.e using `BOSH` technique and protocol for `XMPP`. `RT` implements just the `BOSH` layer, without the XMPP part, which of course can be added on top.
+**NB**: Some `BOSH` implementations are actually `XMPP-BOSH` implementations, meaning they implement *XMPP over BOSH* i.e using `BOSH` technique and protocol for `XMPP`. `RT` implements just the `BOSH` layer, without the `XMPP` part, which of course can be added on top of it.
 
 
 
@@ -31,7 +32,7 @@
 
 //e.g in node
 /*
-var RT = require('./RT.js');
+const RT = require('./RT.js');
 require('./RT.Poll.js');
 require('./RT.BOSH.js');
 require('./RT.WebSocket.js');
@@ -44,16 +45,16 @@ require('./RT.WebSocket.js');
 <script type="text/javascript" src="./RT.WebSocket.js"></script>
 */
 
-var rt_impl = 'ws' /* 'ws'=WebSocket, 'bosh'=BOSH, 'poll'=POll */;
+const rt_impl = 'ws' /* 'ws'=WebSocket, 'bosh'=BOSH, 'poll'=POll */;
 
-var rt_chat = RT({
+const rt_chat = RT({
         use: rt_impl,
-        endpoint: 'ws' === rt_impl ? 'ws://127.0.0.1:1111' : ('bosh' === rt_impl ? './relay.php?bosh=1' : './relay.php?poll=1')
+        endpoint: 'ws' === rt_impl ? 'ws://127.0.0.1:1111' : ('bosh' === rt_impl ? 'http:127.0.0.1:2222/chat/relay.php?bosh=1' : 'http:127.0.0.1:2222/chat/relay.php?poll=1')
     })
     .on('receive', function(evt) {
         if (!evt.data) return;
-        var m = RT.Util.Json.decode(evt.data);
-        output.innerHTML += '<div class="entry'+(m.user === user ? ' own' : '') + '">\
+        let m = JSON.parse(evt.data);
+        output.innerHTML += '<div class="entry' + (m.user === user ? ' own' : '') + '">\
         <span class="user">' + userify(m.user) + '</span>\
         <span class="message">' + textify(m.message) + '</span>\
         </div>';
@@ -74,10 +75,10 @@ function send(event)
 {
     if (RT.Client.OPENED !== rt_chat.status) return;
     if (event && (!key_is(event, 13) || event.shiftKey)) return;
-    var msg = RT.Util.String.trim(input.value || '');
+    var msg = String(input.value || '').trim();
     input.value = '';
     if (!msg.length) return;
-    rt_chat.send(RT.Util.Json.encode({
+    rt_chat.send(JSON.stringify({
         'user': user,
         'message': msg
     }));
@@ -109,7 +110,7 @@ function send(event)
 * [Rubik3](https://github.com/foo123/Rubik3) intuitive 3D Rubik Cube with Three.js
 * [MOD3](https://github.com/foo123/MOD3) JavaScript port of AS3DMod ActionScript 3D Modifier Library
 * [Geometrize](https://github.com/foo123/Geometrize) Computational Geometry and Rendering Library for JavaScript
-* [EazyHttp](https://github.com/foo123/EazyHttp), easy, simple and fast HTTP requests for PHP, JavaScript, Python
+* [EazyHttp](https://github.com/foo123/EazyHttp) easy, simple and fast HTTP requests for PHP, JavaScript, Python
 * [RT](https://github.com/foo123/RT) a versatile real-time communication client for JavaScript supporting Polling / BOSH / WebSockets / WebRTC
 * [AjaxListener.js](https://github.com/foo123/AjaxListener.js): Listen to any AJAX event on page with JavaScript, even by other scripts
 * [asynchronous.js](https://github.com/foo123/asynchronous.js) simple manager for asynchronous, linear, parallel, sequential and interleaved tasks for JavaScript

@@ -25,11 +25,9 @@ var root = this, PROTO = 'prototype', HAS = Object[PROTO].hasOwnProperty,
     isNode = ('undefined' !== typeof global) && ('[object global]' === toString.call(global)),
     isWebWorker = !isXPCOM && !isNode && ('undefined' !== typeof WorkerGlobalScope) && ('function' === typeof importScripts) && (navigator instanceof WorkerNavigator),
     isBrowser = !isXPCOM && !isNode && !isWebWorker && ('undefined' !== typeof navigator),
-    XHR, Util, CC = String.fromCharCode,
     trim_re = /^\s+|\s+$/g,
     trim = String[PROTO].trim ? function(s) {return s.trim();} : function(s) {return s.replace(trim_re, '');},
-    a2b_re = /[^A-Za-z0-9\+\/\=]/g, hex_re = /\x0d\x0a/g,
-    UUID = 0
+    UUID = 0, XHR
 ;
 
 function RT(cfg)
@@ -143,14 +141,14 @@ RT.Client[PROTO] = {
         var self = this, cfg = self.$cfg$;
         if (key)
         {
-            if (arguments.length > 1)
+            if (1 < arguments.length)
             {
                 cfg[key] = val;
                 return self;
             }
             else
             {
-                return cfg[key];
+                return HAS.call(cfg, key) ? cfg[key] : null;
             }
         }
     }
@@ -227,7 +225,7 @@ RT.Client[PROTO].removeEventListener = RT.Client[PROTO].off;
 RT.Client[PROTO].trigger = RT.Client[PROTO].dispatchEvent = RT.Client[PROTO].emit;
 
 // utils --------------------------
-function xhr_client(o, payload)
+function xhr_browser(o, payload)
 {
     var xhr = null, $xhr$ = null, update;
     o = o || {};
@@ -288,7 +286,7 @@ function xhr_client(o, payload)
     $xhr$.onload = function() {
         update(xhr, $xhr$);
         xhr._rawHeaders = $xhr$.getAllResponseHeaders();
-        xhr._headers = headers_decode(xhr._rawHeaders, true);
+        xhr._headers = headers_parse(xhr._rawHeaders);
         if (RT.XHR.DONE === $xhr$.readyState)
         {
             if (200 === $xhr$.status)
@@ -312,9 +310,9 @@ function xhr_client(o, payload)
         if (o.onTimeout) o.onTimeout(update(xhr, $xhr$));
     };
 
-    if (o.headers) headers_encode(o.headers, $xhr$);
+    if (o.headers) headers_set(o.headers, $xhr$);
     if (o.mimeType) $xhr$.overrideMimeType(o.mimeType);
-    if (arguments.length > 1) xhr.send(payload);
+    if (1 < arguments.length) xhr.send(payload);
     return xhr;
 }
 function xhr_xpcom(o, payload)
@@ -372,7 +370,7 @@ function xhr_xpcom(o, payload)
     $xhr$.addEventListener('load', function() {
         update(xhr, $xhr$);
         xhr._rawHeaders = $xhr$.getAllResponseHeaders();
-        xhr._headers = headers_decode(xhr._rawHeaders, true);
+        xhr._headers = headers_parse(xhr._rawHeaders);
         if (RT.XHR.DONE === $xhr$.readyState)
         {
             if (200 === $xhr$.status)
@@ -396,9 +394,9 @@ function xhr_xpcom(o, payload)
         if (o.onTimeout) o.onTimeout(update(xhr, $xhr$));
     });
 
-    if (o.headers) headers_encode(o.headers, $xhr$);
+    if (o.headers) headers_set(o.headers, $xhr$);
     if (o.mimeType) $xhr$.overrideMimeType(o.mimeType);
-    if (arguments.length > 1) xhr.send(payload);
+    if (1 < arguments.length) xhr.send(payload);
     return xhr;
 }
 function xhr_node(o, payload)
@@ -495,71 +493,60 @@ function xhr_node(o, payload)
         xhr.statusText = ee.toString();
         if (o.onError) o.onError(xhr);
     });
-    if (o.headers) headers_encode(o.headers, null, $hr$);
+    if (o.headers) headers_set(o.headers, null, $hr$);
     //if (o.mimeType) $hr$.overrideMimeType(o.mimeType);
-    if (arguments.length > 1) xhr.send(payload);
+    if (1 < arguments.length) xhr.send(payload);
     return xhr;
 }
-XHR.create = isXPCOM ? xhr_xpcom : (isNode ? xhr_node : xhr_client);
-
-Util = RT.Util = {
-Url: {
-    create: function(o) {
-        if (!o) return '';
-        var urlString = [], queue, keys = KEYS(o), key, val, k, kl = keys.length, entry, i, l, kk,
-            encode = Util.Url.encode, to_string;
-        k = 0; queue = k < kl ? [[key=keys[k++], o[key]]] : [];
-        while (queue.length)
+XHR.create = isNode ? xhr_node : (isXPCOM ? xhr_xpcom : xhr_browser);
+XHR.querystring = function(o) {
+    if (!o) return '';
+    if ('string' === typeof o) return urlencode(o);
+    var urlString = [], keys = KEYS(o), kl = keys.length, key, val,
+        k = 0, queue = k < kl ? [[key=keys[k++], o[key]]] : [],
+        entry, i, l, kk, to_string;
+    while (queue.length)
+    {
+        entry = queue.shift();
+        key = entry[0]; val = entry[1];
+        to_string = toString.call(val);
+        if ('[object Array]' === to_string)
         {
-            entry = queue.shift();
-            key = entry[0]; val = entry[1];
-            to_string = toString.call(val);
-            if ('[object Array]' === to_string)
-            {
-                key += '[]';
-                for (i=0,l=val.length; i<l; ++i)
-                    queue.unshift([ key, val[i]]);
-            }
-            else if ('[object Object]' === to_string)
-            {
-                kk = KEYS(val);
-                for (i=0,l=kk.length; i<l; ++i)
-                    queue.unshift([key+'['+kk[i]+']', val[kk[i]]]);
-            }
-            else
-            {
-                urlString.push(encode(key) + '=' + encode(val));
-            }
-            if (!queue.length && k < kl) queue.unshift([key=keys[k++], o[key]]);
+            key += '[]';
+            for (i=0,l=val.length; i<l; ++i)
+                queue.unshift([key, val[i]]);
         }
-        return urlString.join('&');
-    },
-    rawencode: function(s) {
-        return encodeURIComponent(String(s))
-            .split('!').join('%21')
-            .split("'").join('%27')
-            .split('(').join('%28')
-            .split(')').join('%29')
-            .split('*').join('%2A')
-            //.split('~').join('%7E')
-        ;
-    },
-    rawdecode: function(s) {
-        return decodeURIComponent(String(s));
-    },
-    encode: function(s) {
-        return Util.Url.rawencode(s).split('%20').join('+');
-    },
-    decode: function(s) {
-        return Util.Url.rawdecode(String(s).split('+').join('%20'));
+        else if ('[object Object]' === to_string)
+        {
+            kk = KEYS(val);
+            for (i=0,l=kk.length; i<l; ++i)
+                queue.unshift([key+'['+kk[i]+']', val[kk[i]]]);
+        }
+        else
+        {
+            urlString.push(urlencode(key) + '=' + urlencode(val));
+        }
+        if (!queue.length && (k < kl))
+        {
+            queue.unshift([key=keys[k++], o[key]]);
+        }
     }
-}
+    return urlString.join('&');
 };
-function headers_encode(headers, xmlHttpRequest, httpRequestResponse)
+function urlencode(s)
 {
-    var header = '';
-    if (!headers) return header;
-    var keys = KEYS(headers), key, i, l, k, kl, CRLF = "\r\n";
+    return (encodeURIComponent(String(s))
+        .split('!').join('%21')
+        .split("'").join('%27')
+        .split('(').join('%28')
+        .split(')').join('%29')
+        .split('*').join('%2A')
+        /*.split('~').join('%7E')*/).split('%20').join('+');
+}
+function headers_set(headers, xmlHttpRequest, httpRequestResponse)
+{
+    if (!headers) return;
+    var header = '', keys = KEYS(headers), key, i, l, k, kl, CRLF = "\r\n";
     if (httpRequestResponse)
     {
         for (i=0,l=keys.length; i<l; ++i)
@@ -568,7 +555,6 @@ function headers_encode(headers, xmlHttpRequest, httpRequestResponse)
             // both single value and array
             httpRequestResponse.setHeader(key, headers[key]);
         }
-        return httpRequestResponse;
     }
     else if (xmlHttpRequest)
     {
@@ -585,7 +571,6 @@ function headers_encode(headers, xmlHttpRequest, httpRequestResponse)
                 xmlHttpRequest.setRequestHeader(key, String(headers[key]));
             }
         }
-        return xmlHttpRequest;
     }
     else
     {
@@ -597,7 +582,7 @@ function headers_encode(headers, xmlHttpRequest, httpRequestResponse)
                 if (header.length) header += CRLF;
                 header += key + ': ' + String(headers[key][0]);
                 for (k=1,kl=headers[key].length; k<kl; ++k)
-                    header += CRLF + String(headers[key][k]);
+                    header += CRLF + key + ': ' + String(headers[key][k]);
             }
             else
             {
@@ -608,34 +593,28 @@ function headers_encode(headers, xmlHttpRequest, httpRequestResponse)
         return header;
     }
 }
-function headers_decode(headers, lowercase)
+function headers_parse(headers)
 {
-    var header = {}, key = null, parts, i, l, line;
+    var header = {}, key = null, val, parts, i, l;
     if (headers)
     {
-        lowercase = true === lowercase;
         headers = headers.split(/[\r\n]+/g);
         for (i=0,l=headers.length; i<l; ++i)
         {
-            line = headers[i];
-            parts = line.split(':', 2);
-            if (parts.length > 1)
+            parts = headers[i].split(':', 2);
+            if (1 < parts.length)
             {
-                key = trim(parts[0]);
-                if (lowercase) key = key.toLowerCase();
+                key = trim(parts[0]).toLowerCase();
+                val = trim(parts[1]);
                 if (HAS.call(header, key))
                 {
                     if ('string' === typeof header[key]) header[key] = [header[key]];
-                    header[key].push(trim(parts[1]));
+                    header[key].push(val);
                 }
                 else
                 {
-                    header[key] = trim(parts.join(':'));
+                    header[key] = val;
                 }
-            }
-            else if (parts[0].length && key)
-            {
-                header[key] = parts[0];
             }
         }
     }

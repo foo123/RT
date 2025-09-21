@@ -18,8 +18,10 @@ else /* Browser/WebWorker/.. */
 }('undefined' !== typeof self ? self : this, function ModuleFactory__RT_BOSH(RT) {
 "use strict";
 
-var PROTO = 'prototype', toString = Object[PROTO].toString,
-    RT_Client = RT.Client, __super__ = RT_Client[PROTO], U = RT.Util, RT_XHR = RT.XHR
+var PROTO = 'prototype',
+    RT_Client = RT.Client,
+    __super__ = RT_Client[PROTO],
+    XHR = RT.XHR
 ;
 
 var Client_Bosh = RT_Client.BOSH = function Client_Bosh(cfg) {
@@ -81,7 +83,7 @@ Client_Bosh[PROTO].send = function(payload) {
         {
             headers['X-RT--Send'] = 'x-rt--payload';
             headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
-            rt_payload = 'x-rt--payload=' + U.Url.encode(rt_msgs.join(rt_msg));
+            rt_payload = 'x-rt--payload=' + XHR.querystring(rt_msgs.join(rt_msg));
         }
         else
         {
@@ -89,7 +91,7 @@ Client_Bosh[PROTO].send = function(payload) {
             headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
             rt_payload = rt_msgs.join(rt_msg);
         }
-        self.$send$ = RT_XHR.create({
+        self.$send$ = XHR.create({
             url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__=' + (new Date().getTime()),
             timeout         : self.$cfg$.timeout,
             method          : 'POST',
@@ -120,13 +122,10 @@ Client_Bosh[PROTO].send = function(payload) {
                 if (rt_error)
                     return self.emit('error', rt_error);
 
-                if (rt_close)
-                    return self.close();
-
                 if (rt_mID)
                     self.$mID$ = rt_mID;
 
-                // message(s) sent
+                // messages sent, remove them from queue
                 self.$queue$.splice(0, rt_msgs.length);
 
                 if (rt_msg)
@@ -135,10 +134,13 @@ Client_Bosh[PROTO].send = function(payload) {
                     var received = (xhr.responseText || '').split(rt_msg), i, l;
                     for (i=0,l=received.length; i<l; ++i) self.emit('receive', received[i]);
                 }
-                else if (!!xhr.responseText)
+                else if (xhr.responseText && xhr.responseText.length)
                 {
                     self.emit('receive', xhr.responseText);
                 }
+
+                if (rt_close)
+                    return self.close();
 
                 // more messages pending? send new
                 if (self.$queue$.length) setTimeout(send, 100);
@@ -166,7 +168,7 @@ Client_Bosh[PROTO].$receive$ = function() {
             'X-RT--mID'         : self.$mID$
         }
     ;
-    self.$recv$ = RT_XHR.create({
+    self.$recv$ = XHR.create({
         url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__=' + (new Date().getTime()),
         timeout         : self.$cfg$.timeout,
         method          : 'POST',
@@ -219,9 +221,6 @@ Client_Bosh[PROTO].$receive$ = function() {
             if (rt_error)
                 return self.emit('error', rt_error);
 
-            if (rt_close)
-                return self.close();
-
             if (rt_mID)
                 self.$mID$ = rt_mID;
 
@@ -231,10 +230,13 @@ Client_Bosh[PROTO].$receive$ = function() {
                 var received = (xhr.responseText || '').split(rt_msg), i, l;
                 for (i=0,l=received.length; i<l; ++i) self.emit('receive', received[i]);
             }
-            else if (!!xhr.responseText)
+            else if (xhr.responseText && xhr.responseText.length)
             {
                 self.emit('receive', xhr.responseText);
             }
+
+            if (rt_close)
+                return self.close();
 
             if (!self.$recv$) setTimeout(function() {self.$receive$();}, 100);
         }

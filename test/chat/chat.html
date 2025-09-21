@@ -9,6 +9,10 @@
 <script type="text/javascript" src="./assets/js/chat.js"></script>
 <link type="text/css" rel="stylesheet" href="./assets/css/skypecon.css" media="screen" />
 <style type="text/css">
+body {
+    font-family: sans-serif;
+    font-size: 16px;
+}
 #output {
     position: relative;
     padding: 4px;
@@ -105,25 +109,36 @@ function textify(text)
     return emotify(linkify(newlinefy(htmlify(text))));
 }
 
-var user = (document.location.href.match(/[?&]user=([^&=]+)/) || ['', 'user'])[1];
-var output = document.getElementById('output'), input = document.getElementById('input');
-
-var rt_impl = (document.location.href.match(/[?&]use=([^&=]+)/) || ['', 'poll'])[1].toLowerCase();
+const user = (document.location.href.match(/[?&]user=([^&=]+)/i) || ['', 'user'])[1];
+const rt_impl = (document.location.href.match(/[?&]use=([^&=]+)/i) || ['', 'poll'])[1].toLowerCase();
 if ('poll' !== rt_impl && 'bosh' !== rt_impl && 'ws' !== rt_impl) rt_impl = 'poll';
+const output = document.getElementById('output'), input = document.getElementById('input');
 
 document.getElementById('rt_impl').innerHTML = 'ws' === rt_impl ? 'WebSocket' : ('bosh' === rt_impl ? 'BOSH' : 'Poll');
 
-var rt_chat = RT({
+const rt_chat = RT({
         use: rt_impl,
-        endpoint: 'ws' === rt_impl ? 'ws://127.0.0.1:1111' : ('bosh' === rt_impl ? './relay.php?bosh=1' : './relay.php?poll=1')
+        endpoint: 'ws' === rt_impl ? 'ws://127.0.0.1:1111' : ('bosh' === rt_impl ? 'http://127.0.0.1:2222/test/chat/relay.php?bosh=1' : 'http://127.0.0.1:2222/test/chat/relay.php?poll=1')
     })
     .on('receive', function(evt) {
         if (!evt.data) return;
-        var m = JSON.parse(String(evt.data));
-        output.innerHTML += '<div class="entry'+(m.user === user ? ' own' : '') + '">\
-        <span class="user">' + userify(m.user) + '</span>\
-        <span class="message">' + textify(m.message) + '</span>\
-        </div>';
+        function accept(data)
+        {
+            data = JSON.parse(String(data));
+            output.innerHTML += '<div class="entry' + (data.user === user ? ' own' : '') + '">\
+            <span class="user">' + userify(data.user) + '</span>\
+            <span class="message">' + textify(data.message) + '</span>\
+            </div>';
+        }
+        if (evt.data instanceof Blob)
+        {
+            // websocket returns Blob
+            evt.data.text().then(accept);
+        }
+        else
+        {
+            accept(evt.data);
+        }
     })
     /*.on('open', function() {
         alert('OPENED');
@@ -134,14 +149,14 @@ var rt_chat = RT({
     .on('error', function(evt) {
         alert('ERROR: '+evt.data);
     })
-    .init( )
+    .init()
 ;
 
 function send(event)
 {
     if (RT.Client.OPENED !== rt_chat.status) return;
     if (event && (!key_is(event, 13) || event.shiftKey)) return;
-    var msg = (input.value || '').trim();
+    var msg = String(input.value || '').trim();
     input.value = '';
     if (!msg.length) return;
     rt_chat.send(JSON.stringify({

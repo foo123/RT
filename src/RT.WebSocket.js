@@ -18,8 +18,10 @@ else /* Browser/WebWorker/.. */
 }('undefined' !== typeof self ? self : this, function ModuleFactory__RT_WebSocket(RT) {
 "use strict";
 
-var root = this, PROTO = 'prototype', toString = Object[PROTO].toString,
-    RT_Client = RT.Client, __super__ = RT_Client[PROTO], WebSocket
+var root = this, PROTO = 'prototype',
+    RT_Client = RT.Client,
+    __super__ = RT_Client[PROTO],
+    WebSocket
 ;
 
 function load(path, ws_impl, cb)
@@ -90,6 +92,7 @@ var Client_WS = RT_Client.WS = function Client_WS(cfg) {
     if (!(self instanceof Client_WS)) return new Client_WS(cfg);
     __super__.constructor.call(self, cfg);
     self.$ws$ = null;
+    self.$queue$ = null;
 };
 RT_Client.Impl['ws'] = RT_Client.Impl['websocket'] = RT_Client.Impl['web-socket'] = Client_WS;
 
@@ -97,9 +100,11 @@ RT_Client.Impl['ws'] = RT_Client.Impl['websocket'] = RT_Client.Impl['web-socket'
 Client_WS[PROTO] = Object.create(__super__);
 Client_WS[PROTO].constructor = Client_WS;
 Client_WS[PROTO].$ws$ = null;
+Client_WS[PROTO].$queue$ = null;
 Client_WS[PROTO].dispose = function() {
     var self = this;
     self.$ws$ = null;
+    self.$queue$ = null;
     return __super__.dispose.call(self);
 };
 Client_WS[PROTO].abort = function() {
@@ -120,7 +125,15 @@ Client_WS[PROTO].close = function(e) {
 };
 Client_WS[PROTO].send = function(payload) {
     var self = this, ws = self.$ws$;
-    if (ws && (WebSocket.OPEN === ws.readyState)) ws.send(String(payload));
+    if (ws && (WebSocket.OPEN === ws.readyState))
+    {
+        ws.send(String(payload));
+    }
+    else
+    {
+        if (!self.$queue$) self.$queue$ = [];
+        self.$queue$.push(payload);
+    }
     return self;
 };
 Client_WS[PROTO].listen = function() {
@@ -129,21 +142,24 @@ Client_WS[PROTO].listen = function() {
     {
         // wait until WebSocket is available, if needed
         setTimeout(function() {self.listen();}, 100);
-        return self;
     }
-    ws = self.$ws$ = new WebSocket(self.$cfg$.endpoint, self.$cfg$.protocol || null);
-    ws.addEventListener('open', function(e) {
-        self.open(e);
-    });
-    ws.addEventListener('close', function(e) {
-        self.close(e);
-    });
-    ws.addEventListener('error', function(e) {
-        self.emit('error', e);
-    });
-    ws.addEventListener('message', function(e) {
-        self.emit('receive', e.data);
-    });
+    else
+    {
+        ws = self.$ws$ = new WebSocket(self.$cfg$.endpoint, self.$cfg$.protocol || null);
+        ws.addEventListener('open', function(e) {
+            self.open(e);
+            while (self.$queue$ && self.$queue$.length) self.send(self.$queue$.shift()); // send pending messages
+        });
+        ws.addEventListener('close', function(e) {
+            self.close(e);
+        });
+        ws.addEventListener('error', function(e) {
+            self.emit('error', e);
+        });
+        ws.addEventListener('message', function(e) {
+            self.emit('receive', e.data);
+        });
+    }
     return self;
 };
 

@@ -18,8 +18,10 @@ else /* Browser/WebWorker/.. */
 }('undefined' !== typeof self ? self : this, function ModuleFactory__RT_Poll(RT) {
 "use strict";
 
-var PROTO = 'prototype', HAS = 'hasOwnProperty', toString = Object[PROTO].toString,
-    RT_Client = RT.Client, __super__ = RT_Client[PROTO], U = RT.Util, RT_XHR = RT.XHR
+var PROTO = 'prototype',
+    RT_Client = RT.Client,
+    __super__ = RT_Client[PROTO],
+    XHR = RT.XHR
 ;
 
 var Client_Poll = RT_Client.Poll = function Client_Poll(cfg) {
@@ -76,7 +78,7 @@ Client_Poll[PROTO].listen = function() {
         ;
         if (self.$queue$.length)
         {
-            // send message(s) on same request
+            // send messages on same request
             rt_msgs = self.$queue$.slice();
             if (asXML)
             {
@@ -87,7 +89,7 @@ Client_Poll[PROTO].listen = function() {
             {
                 headers['X-RT--Send'] = 'x-rt--payload';
                 headers['X-RT--Message'] = rt_msg = RT.UUID('------_rt_msg_', '_------');
-                rt_payload = 'x-rt--payload=' + U.Url.encode(rt_msgs.join(rt_msg));
+                rt_payload = 'x-rt--payload=' + XHR.querystring(rt_msgs.join(rt_msg));
             }
             else
             {
@@ -96,7 +98,7 @@ Client_Poll[PROTO].listen = function() {
                 rt_payload = rt_msgs.join(rt_msg);
             }
         }
-        self.$xhr$ = RT_XHR.create({
+        self.$xhr$ = XHR.create({
             url             : self.$cfg$.endpoint + (-1 < self.$cfg$.endpoint.indexOf('?') ? '&' : '?') + '__nocache__=' + (new Date().getTime()),
             method          : 'POST',
             responseType    : /*asXML ? 'xml' :*/ 'text',
@@ -121,26 +123,26 @@ Client_Poll[PROTO].listen = function() {
                 if (rt_error)
                     return self.emit('error', rt_error);
 
-                if (rt_close)
-                    return self.close();
+                // messages sent, remove them from queue
+                if (rt_msgs)
+                    self.$queue$.splice(0, rt_msgs.length);
 
                 if (rt_mID)
                     self.$mID$ = rt_mID;
-
-                // message(s) sent
-                if (rt_msgs)
-                    self.$queue$.splice(0, rt_msgs.length);
 
                 if (rt_msg)
                 {
                     // at the same time, handle incoming message(s)
                     var received = (xhr.responseText || '').split(rt_msg), i, l;
-                    for(i=0,l=received.length; i<l; ++i) self.emit('receive', received[i]);
+                    for (i=0,l=received.length; i<l; ++i) self.emit('receive', received[i]);
                 }
-                else if (!!xhr.responseText)
+                else if (xhr.responseText && xhr.responseText.length)
                 {
                     self.emit('receive', xhr.responseText);
                 }
+
+                if (rt_close)
+                    return self.close();
 
                 self.$timer$ = setTimeout(poll, self.$cfg$.pollInterval);
             }

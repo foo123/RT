@@ -28,7 +28,7 @@ function doAjax(payload)
         onError         : function(xhr) {
             status.innerHTML = xhr.statusText;
         }
-    }, 'x-rt--payload=' + RT.Util.Url.encode(String(payload)));
+    }, 'x-rt--payload=' + RT.XHR.querystring(String(payload)));
 }
 </script>
 </head>

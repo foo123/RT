@@ -1,6 +1,6 @@
 "use strict";
 
-var clients = [],
+const clients = [],
     // websocket server
     WebSocket = require('ws'),
     wss = new WebSocket.Server({
@@ -18,9 +18,9 @@ wss.on('connection', function(ws) {
     });
 
     ws.on('message', function(message) {
-        for (var i=0,l=clients.length; i<l; ++i)
+        for (let i=0,l=clients.length; i<l; ++i)
         {
-            var client = clients[i];
+            let client = clients[i];
             if (WebSocket.OPEN === client.readyState) client.send(message);
         }
     });

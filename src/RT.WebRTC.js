@@ -18,16 +18,6 @@ else /* Browser/WebWorker/.. */
 }('undefined' !== typeof self ? self : this, function ModuleFactory__RT_WebRTC(RT) {
 "use strict";
 
-/* !function( root, factory ) {
-"use strict";
-if ( ('undefined'!==typeof Components)&&('object'===typeof Components.classes)&&('object'===typeof Components.classesByID)&&Components.utils&&('function'===typeof Components.utils['import']) )
-    factory( root, root['RT'] );
-else if ( 'object' === typeof exports )
-    factory( root, require('./RT.js') );
-else
-    factory( root, root['RT'] ) && ('function' === typeof define) && define.amd && define(function( ){ return root['RT']; });
-}(this, function( root, RT ) {*/
-
 // TODO
 return RT;
 });
