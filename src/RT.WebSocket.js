@@ -145,7 +145,7 @@ Client_WS[PROTO].listen = function() {
     }
     else
     {
-        ws = self.$ws$ = new WebSocket(self.$cfg$.endpoint, self.$cfg$.protocol || null);
+        ws = self.$ws$ = self.$cfg$.protocol ? (new WebSocket(self.$cfg$.endpoint, self.$cfg$.protocol)) : (new WebSocket(self.$cfg$.endpoint));
         ws.addEventListener('open', function(e) {
             self.open(e);
             while (self.$queue$ && self.$queue$.length) self.send(self.$queue$.shift()); // send pending messages

@@ -100,9 +100,14 @@ var rt_chat = RT({
     .init()
 ;
 
-function send(msg)
+function send(msg, tries)
 {
-    if (RT.Client.OPENED !== rt_chat.status) return;
+    if (RT.Client.OPENED !== rt_chat.status)
+    {
+        tries = tries || 0;
+        if (tries < 5) setTimeout(function() {send(msg, tries + 1);}, 100);
+        return;
+    }
     msg = String(msg).trim();
     if (!msg.length) return;
     rt_chat.send(JSON.stringify({
@@ -110,3 +115,7 @@ function send(msg)
         'message': msg
     }));
 }
+
+if (args.options['msg']) send(args.options['msg']);
+
+setTimeout(function() {rt_chat.close().dispose();}, 20000);

@@ -64,7 +64,9 @@ Client_Poll[PROTO].send = function(payload) {
 };
 Client_Poll[PROTO].listen = function() {
     var self = this;
+    if (null == self.$mID$) return self; // disposed
     var poll = function poll() {
+        if (null == self.$mID$) return; // disposed
         var asUrlEncoded = 'urlencoded' === self.$cfg$.contentType, asXML = 'xml' === self.$cfg$.contentType,
             charset = self.$cfg$.charset ? ('charset=' + String(self.$cfg$.charset)) : 'charset=utf8',
             contentType = asXML ? 'text/xml' : (asUrlEncoded ? 'application/x-www-form-urlencoded' : 'text/plain'),
